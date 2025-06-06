@@ -12,7 +12,3 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 ipnetwork = "0.20"
-
-[package.metadata.deb]
-maintainer = "Luca Ceccarelli <luca.ceccarelli@etu.mines-ales.fr>"
-depends = "libc6 (>= 2.17)"
