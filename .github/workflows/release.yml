@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [created]
 
 jobs:
   build:
@@ -33,7 +31,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/custom_ospf
+            target/release/custom-ospf
             target/debian/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
