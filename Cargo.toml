@@ -3,6 +3,8 @@ name = "custom-ospf"
 version = "0.1.0"
 edition = "2024"
 description = "Custom Implementation of OSPF protocol"
+license = "MIT"
+authors = ["Luca Ceccarelli <luca.ceccarelli@etu.mines-ales.fr>"]
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
