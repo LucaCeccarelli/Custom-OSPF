@@ -1,16 +1,18 @@
-name: Build and Release Executable and .deb
+name: Release Binary and .deb
 
 on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [created]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v3
 
       - name: Set up Rust
@@ -18,39 +20,21 @@ jobs:
         with:
           rust-version: stable
 
-      - name: Build release binary
+      - name: Build binary
         run: cargo build --release
 
-      - name: Install cargo-deb and create .deb
+      - name: Install cargo-deb and build .deb
         run: |
-          sudo apt-get update && sudo apt-get install -y cargo-deb
+          sudo apt-get update
+          sudo apt-get install -y cargo-deb
           cargo install cargo-deb || true
           cargo deb
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-artifacts
-          path: |
-            target/release/your_binary_name
-            target/debian/*.deb
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: built-artifacts
-          path: .
-
-      - name: Create GitHub Release
+      - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            custom-ospf
-            *.deb
+            target/release/custom_ospf
+            target/debian/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
