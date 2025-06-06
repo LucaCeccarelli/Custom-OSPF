@@ -1,17 +1,16 @@
-name: Build and Release Debian Binary
+name: Build and Release Executable and .deb
 
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0
+      - 'v*'
 
 jobs:
   build:
-    name: Build for Debian
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout source
         uses: actions/checkout@v3
 
       - name: Set up Rust
@@ -22,33 +21,36 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
-      - name: Package as .deb
+      - name: Install cargo-deb and create .deb
         run: |
           sudo apt-get update && sudo apt-get install -y cargo-deb
           cargo install cargo-deb || true
           cargo deb
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deb-package
-          path: target/debian/*.deb
+          name: built-artifacts
+          path: |
+            target/release/your_binary_name
+            target/debian/*.deb
 
   release:
-    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: deb-package
+          name: built-artifacts
           path: .
 
-      - name: Create GitHub release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.deb"
+          files: |
+            custom-ospf
+            *.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
