@@ -20,15 +20,14 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
       - name: Build binary
         run: cargo build --release
 
-      - name: Install cargo-deb and build .deb
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cargo-deb
-          cargo install cargo-deb || true
-          cargo deb
+      - name: Build .deb package
+        run: cargo deb
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
