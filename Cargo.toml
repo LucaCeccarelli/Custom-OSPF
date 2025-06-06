@@ -2,6 +2,7 @@
 name = "custom-ospf"
 version = "0.1.0"
 edition = "2024"
+description = "Custom Implementation of OSPF protocol"
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
@@ -12,5 +13,4 @@ ipnetwork = "0.20"
 
 [package.metadata.deb]
 maintainer = "Luca Ceccarelli <luca.ceccarelli@etu.mines-ales.fr>"
-description = "Custom Implementation of OSPF protocol"
 depends = "libc6 (>= 2.17)"
