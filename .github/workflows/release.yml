@@ -31,13 +31,6 @@ jobs:
       - name: Build .deb package (with MUSL binary)
         run: cargo deb --target x86_64-unknown-linux-musl
 
-      - name: List target directory contents (for debugging paths)
-        run: |
-          echo "--- MUSL target release directory ---"
-          ls -R target/x86_64-unknown-linux-musl/release/
-          echo "--- Debian package directory ---"
-          ls -R target/debian/ # cargo-deb usually outputs .deb packages here
-
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
         with:
