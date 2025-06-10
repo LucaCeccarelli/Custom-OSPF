@@ -29,13 +29,28 @@ jobs:
         run: cargo build --release --target x86_64-unknown-linux-musl
 
       - name: Build .deb package (with MUSL binary)
-        run: cargo deb --target x86_64-unknown-linux-musl
+        run: cargo deb -vv --target x86_64-unknown-linux-musl
+
+      - name: Check for generated .deb file and list directories
+        run: |
+          echo "--- Searching for .deb files and custom-ospf binary in target/ ---"
+          find target -maxdepth 4 $  -name custom-ospf -o -name '*.deb' -o -type d -name 'debian'  $  -ls
+          echo "--- Verifying expected .deb location ---"
+          if [ -d "target/debian" ] && [ -n "$(ls -A target/debian/*.deb 2>/dev/null)" ]; then
+            echo "SUCCESS: .deb file(s) found in target/debian/:"
+            ls -l target/debian/
+          else
+            echo "ERROR: No .deb file found in target/debian/"
+            echo "Listing target/ contents:"
+            ls -R target/
+            exit 1 # Fail the step if .deb is not found where expected
+          fi
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             target/x86_64-unknown-linux-musl/release/custom-ospf
-            target/debian/*.deb # cargo-deb default output location for .deb files
+            target/debian/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
