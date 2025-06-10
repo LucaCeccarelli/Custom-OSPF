@@ -1,4 +1,4 @@
-name: Release Binary and .deb
+name: Release Binary and .deb (Debian Build)
 
 on:
   push:
@@ -9,12 +9,27 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: debian-latest
+  build_on_debian:
+    runs-on: ubuntu-latest
+
+    container:
+      image: debian:bullseye
 
     steps:
+      - name: Install prerequisites in container
+        run: |
+          apt-get update
+          # build-essential for C compilers, git for checkout, curl for rustup,
+          # pkg-config and libssl-dev are common Rust build dependencies
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            git \
+            curl \
+            pkg-config \
+            libssl-dev
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Use a newer version of checkout
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -29,6 +44,15 @@ jobs:
 
       - name: Build .deb package
         run: cargo deb
+
+      - name: Verify .deb package and binary
+        run: |
+          echo "--- Contents of target/release ---"
+          ls -l target/release/
+          echo "--- Contents of target/debian ---"
+          ls -l target/debian/
+          echo "--- Checking GLIBC dependencies of the binary ---"
+          ldd target/release/custom-ospf || echo "ldd command failed, binary might be static or not found"
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
