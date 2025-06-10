@@ -1,4 +1,4 @@
-name: Release Binary and .deb
+name: Release Binary and .deb (MUSL)
 
 on:
   push:
@@ -9,32 +9,40 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build_and_release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Rust
+      - name: Set up Rust and MUSL target
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          targets: x86_64-unknown-linux-musl
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
-      - name: Build binary
-        run: cargo build --release
+      - name: Build MUSL binary
+        run: cargo build --release --target x86_64-unknown-linux-musl
 
-      - name: Build .deb package
-        run: cargo deb
+      - name: Build .deb package (with MUSL binary)
+        run: cargo deb --target x86_64-unknown-linux-musl
+
+      - name: List target directory contents (for debugging paths)
+        run: |
+          echo "--- MUSL target release directory ---"
+          ls -R target/x86_64-unknown-linux-musl/release/
+          echo "--- Debian package directory ---"
+          ls -R target/debian/ # cargo-deb usually outputs .deb packages here
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/custom-ospf
-            target/debian/*.deb
+            target/x86_64-unknown-linux-musl/release/custom-ospf
+            target/debian/*.deb # cargo-deb default output location for .deb files
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
