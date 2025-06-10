@@ -13,23 +13,26 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: debian:bullseye
+      image: debian:bullseye # Or debian:bookworm
 
     steps:
       - name: Install prerequisites in container
         run: |
           apt-get update
-          # build-essential for C compilers, git for checkout, curl for rustup,
-          # pkg-config and libssl-dev are common Rust build dependencies
+          # Add ca-certificates here!
+          # git is also explicitly added to ensure it's available before checkout if needed
           apt-get install -y --no-install-recommends \
-            build-essential \
+            ca-certificates \
             git \
             curl \
+            build-essential \
             pkg-config \
             libssl-dev
+          # Optional: Clean up apt cache to reduce layer size, not critical for functionality
+          # apt-get clean && rm -rf /var/lib/apt/lists/*
 
       - name: Checkout
-        uses: actions/checkout@v4 # Use a newer version of checkout
+        uses: actions/checkout@v4
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,7 +55,10 @@ jobs:
           echo "--- Contents of target/debian ---"
           ls -l target/debian/
           echo "--- Checking GLIBC dependencies of the binary ---"
-          ldd target/release/custom-ospf || echo "ldd command failed, binary might be static or not found"
+          # Use objdump as ldd might not be available or might act differently in some minimal containers for static binaries
+          # If your binary is dynamically linked, ldd is fine.
+          # objdump -p target/release/custom-ospf | grep GLIBC || echo "GLIBC strings not found or objdump error"
+          ldd target/release/custom-ospf || echo "ldd command failed or binary is static"
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
