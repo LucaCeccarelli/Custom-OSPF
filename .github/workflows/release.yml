@@ -35,7 +35,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/x86_64-unknown-linux-musl/release/custom-ospf # Update path for musl target
-            target/x86_64-unknown-linux-musl/debian/*.deb # Update path for musl target
+            target/x86_64-unknown-linux-musl/release/custom-ospf
+            target/x86_64-unknown-linux-musl/debian/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
