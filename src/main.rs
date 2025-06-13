@@ -1,17 +1,14 @@
-mod types;
-mod network;
-mod routing;
-mod system;
-
-use clap::{Args, Parser, Subcommand};
-use std::net::{IpAddr, SocketAddr};
-use tokio::time::{interval, Duration};
+use clap::{Parser, Subcommand};
+use custom_ospf::*;
+use custom_ospf::config::*;
+use custom_ospf::protocol::*;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use log::{info, error};
 
 #[derive(Parser)]
-#[command(name = "custom-ospf")]
-#[command(about = "A custom routing protocol implementation")]
+#[command(name = "simple-routing-protocol")]
+#[command(about = "A simple routing protocol implementation")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -20,179 +17,320 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start the routing protocol daemon
-    Start(StartArgs),
-    /// Show neighbor list
-    Neighbors,
-    /// Show routing table
-    Routes,
-    /// Enable/disable protocol
-    Control { enable: bool },
-    /// Configure interfaces
-    Interface {
-        #[arg(long)]
-        add: Option<String>,
-        #[arg(long)]
-        remove: Option<String>,
-        #[arg(long)]
-        list: bool,
+    Start {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Configure router settings
+    Config {
+        #[command(subcommand)]
+        config_cmd: ConfigCommands,
+    },
+    /// Show routing information
+    Show {
+        #[command(subcommand)]
+        show_cmd: ShowCommands,
+    },
+    /// Control protocol state
+    Control {
+        #[command(subcommand)]
+        control_cmd: ControlCommands,
     },
 }
 
-#[derive(Args)]
-struct StartArgs {
-    /// Local IP address to bind to
-    #[arg(long, default_value = "0.0.0.0")]
-    bind_ip: IpAddr,
-
-    /// Port to bind to
-    #[arg(long, default_value = "5000")]
-    port: u16,
-
-    /// Hostname for this router
-    #[arg(long)]
-    hostname: Option<String>,
-
-    /// Update interval in seconds
-    #[arg(long, default_value = "30")]
-    update_interval: u64,
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Create new router configuration
+    Init {
+        #[arg(short, long)]
+        router_id: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long, default_value = "router.json")]
+        output: String,
+    },
+    /// Add network interface
+    AddInterface {
+        #[arg(short, long)]
+        config: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        ip: String,
+        #[arg(short, long)]
+        network: String,
+        #[arg(short, long, default_value = "1000000000")]
+        bandwidth: u64,
+    },
+    /// Set as default router
+    SetDefault {
+        #[arg(short, long)]
+        config: String,
+        #[arg(short, long)]
+        enabled: bool,
+    },
 }
 
-struct RoutingDaemon {
-    network_manager: network::NetworkManager,
-    routing_engine: Arc<Mutex<routing::RoutingEngine>>,
-    enabled: bool,
+#[derive(Subcommand)]
+enum ShowCommands {
+    /// Show neighbors
+    Neighbors {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Show routing table
+    Routes {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Show network topology
+    Topology {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Show interface status
+    Interfaces {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
 }
 
-impl RoutingDaemon {
-    pub fn new(bind_addr: SocketAddr, hostname: String, local_ip: IpAddr) -> Result<Self, Box<dyn std::error::Error>> {
-        let network_manager = network::NetworkManager::new(bind_addr, hostname)?;
-        let routing_engine = Arc::new(Mutex::new(routing::RoutingEngine::new(local_ip)));
-
-        Ok(RoutingDaemon {
-            network_manager,
-            routing_engine,
-            enabled: true,
-        })
-    }
-
-    pub async fn run(&mut self, update_interval: Duration) -> Result<(), Box<dyn std::error::Error>> {
-        let mut update_timer = interval(update_interval);
-
-        println!("Routing protocol started. Update interval: {:?}", update_interval);
-
-        loop {
-            tokio::select! {
-                _ = update_timer.tick() => {
-                    if self.enabled {
-                        self.send_update().await?;
-                    }
-                }
-
-                // Handle incoming messages
-                result = self.network_manager.receive_routing_update() => {
-                    match result {
-                        Ok(message) => {
-                            if self.enabled {
-                                self.process_routing_message(message).await?;
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Error receiving message: {}", e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    async fn send_update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let routing_engine = self.routing_engine.lock().await;
-        let routes: Vec<types::Route> = routing_engine.get_neighbors()
-            .into_iter()
-            .map(|neighbor| types::Route {
-                destination: ipnetwork::IpNetwork::new(neighbor.id, 32).unwrap(),
-                next_hop: neighbor.id,
-                metric: 1,
-                hop_count: 1,
-                path: vec![neighbor.id],
-            })
-            .collect();
-
-        let neighbors = routing_engine.get_neighbors();
-        drop(routing_engine);
-
-        self.network_manager.send_routing_update(routes, neighbors).await?;
-        Ok(())
-    }
-
-    async fn process_routing_message(&self, message: types::RoutingMessage) -> Result<(), Box<dyn std::error::Error>> {
-        let mut routing_engine = self.routing_engine.lock().await;
-        routing_engine.update_topology(message);
-        let routes = routing_engine.compute_shortest_paths();
-        drop(routing_engine);
-
-        // Update system routing table
-        system::SystemIntegration::update_routing_table(&routes)?;
-
-        println!("Updated routing table with {} routes", routes.len());
-        Ok(())
-    }
+#[derive(Subcommand)]
+enum ControlCommands {
+    /// Enable the routing protocol
+    Enable {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Disable the routing protocol
+    Disable {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+    },
+    /// Enable/disable specific interface
+    Interface {
+        #[arg(short, long, default_value = "router.json")]
+        config: String,
+        #[arg(short, long)]
+        name: String,
+        #[arg(short, long)]
+        enabled: bool,
+    },
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Start(args) => {
-            let bind_addr = SocketAddr::new(args.bind_ip, args.port);
-            let hostname = args.hostname.unwrap_or_else(|| {
-                std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string())
-            });
+        Commands::Start { config } => {
+            start_daemon(config).await?;
+        }
+        Commands::Config { config_cmd } => {
+            handle_config_command(config_cmd).await?;
+        }
+        Commands::Show { show_cmd } => {
+            handle_show_command(show_cmd).await?;
+        }
+        Commands::Control { control_cmd } => {
+            handle_control_command(control_cmd).await?;
+        }
+    }
 
-            let mut daemon = RoutingDaemon::new(bind_addr, hostname, args.bind_ip)?;
-            let update_interval = Duration::from_secs(args.update_interval);
+    Ok(())
+}
 
-            daemon.run(update_interval).await?;
+async fn start_daemon(config_path: String) -> anyhow::Result<()> {
+    info!("Starting routing protocol daemon with config: {}", config_path);
+
+    // Load configuration
+    let config = RouterConfig::load_from_file(&config_path)?;
+
+    // Create router state
+    let mut router_state = RouterState::new(config.router_id.clone());
+    router_state.enabled = config.enabled;
+    router_state.is_default_router = config.is_default_router;
+    router_state.interfaces = config.to_network_interfaces();
+
+    let shared_state = Arc::new(RwLock::new(router_state));
+
+    // Start protocol engine
+    let protocol_engine = ProtocolEngine::new(shared_state.clone()).await?;
+
+    info!("Router {} started", config.router_id);
+
+    // Start the protocol engine (this will run indefinitely)
+    protocol_engine.start().await?;
+
+    Ok(())
+}
+
+async fn handle_config_command(cmd: ConfigCommands) -> anyhow::Result<()> {
+    match cmd {
+        ConfigCommands::Init { router_id, name, output } => {
+            let config = RouterConfig::new(router_id.clone(), name);
+            config.save_to_file(&output)?;
+            println!("Router configuration created: {}", output);
+            println!("Router ID: {}", router_id);
         }
 
-        Commands::Neighbors => {
-            println!("Neighbor list functionality - would connect to running daemon");
-            // Implementation would connect to running daemon via IPC
+        ConfigCommands::AddInterface { config, name, ip, network, bandwidth } => {
+            let mut router_config = RouterConfig::load_from_file(&config)?;
+
+            let ip_addr: std::net::IpAddr = ip.parse()?;
+            let network: ipnetwork::IpNetwork = network.parse()?;
+
+            let interface_config = InterfaceConfig {
+                name: name.clone(),
+                ip_address: ip_addr,
+                network,
+                bandwidth,
+                enabled: true,
+                include_in_routing: true,
+            };
+
+            router_config.add_interface(interface_config);
+            router_config.save_to_file(&config)?;
+
+            println!("Interface {} added to router configuration", name);
         }
 
-        Commands::Routes => {
-            println!("Route display functionality - would connect to running daemon");
-            // Implementation would connect to running daemon via IPC
+        ConfigCommands::SetDefault { config, enabled } => {
+            let mut router_config = RouterConfig::load_from_file(&config)?;
+            router_config.is_default_router = enabled;
+            router_config.save_to_file(&config)?;
+
+            println!("Default router setting: {}", enabled);
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_show_command(cmd: ShowCommands) -> anyhow::Result<()> {
+    match cmd {
+        ShowCommands::Neighbors { config } => {
+            show_neighbors(&config).await?;
+        }
+        ShowCommands::Routes { config } => {
+            show_routes(&config).await?;
+        }
+        ShowCommands::Topology { config } => {
+            show_topology(&config).await?;
+        }
+        ShowCommands::Interfaces { config } => {
+            show_interfaces(&config).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_control_command(cmd: ControlCommands) -> anyhow::Result<()> {
+    match cmd {
+        ControlCommands::Enable { config } => {
+            let mut router_config = RouterConfig::load_from_file(&config)?;
+            router_config.enabled = true;
+            router_config.save_to_file(&config)?;
+            println!("Routing protocol enabled");
         }
 
-        Commands::Control { enable } => {
-            println!("Protocol {}", if enable { "enabled" } else { "disabled" });
-            // Implementation would send control message to running daemon
+        ControlCommands::Disable { config } => {
+            let mut router_config = RouterConfig::load_from_file(&config)?;
+            router_config.enabled = false;
+            router_config.save_to_file(&config)?;
+            println!("Routing protocol disabled");
         }
 
-        Commands::Interface { add, remove, list } => {
-            if list {
-                match system::SystemIntegration::get_interface_list() {
-                    Ok(interfaces) => {
-                        println!("Available interfaces:");
-                        for interface in interfaces {
-                            println!("  {}", interface);
-                        }
-                    }
-                    Err(e) => eprintln!("Error listing interfaces: {}", e),
-                }
-            }
-
-            if let Some(interface) = add {
-                println!("Would add interface: {}", interface);
-            }
-
-            if let Some(interface) = remove {
-                println!("Would remove interface: {}", interface);
+        ControlCommands::Interface { config, name, enabled } => {
+            let mut router_config = RouterConfig::load_from_file(&config)?;
+            if let Some(interface) = router_config.interfaces.get_mut(&name) {
+                interface.enabled = enabled;
+                router_config.save_to_file(&config)?;
+                println!("Interface {} {}", name, if enabled { "enabled" } else { "disabled" });
+            } else {
+                eprintln!("Interface {} not found", name);
             }
         }
     }
 
     Ok(())
+}
+
+async fn show_neighbors(config_path: &str) -> anyhow::Result<()> {
+    // In a real implementation, this would connect to the running daemon
+    // For now, we'll show what would be displayed
+    println!("Neighbors for router:");
+    println!("{:<20} {:<15} {:<15} {:<10} {:<15}",
+             "Router ID", "IP Address", "Network", "Bandwidth", "Last Seen");
+    println!("{}", "-".repeat(80));
+
+    // This is a placeholder - in reality, you'd query the running daemon
+    println!("(Connect to running daemon to show live neighbor information)");
+
+    Ok(())
+}
+
+async fn show_routes(config_path: &str) -> anyhow::Result<()> {
+    println!("Routing Table:");
+    println!("{:<18} {:<15} {:<12} {:<8} {:<10}",
+             "Destination", "Next Hop", "Interface", "Metric", "Type");
+    println!("{}", "-".repeat(70));
+
+    // Placeholder for actual routing table display
+    println!("(Connect to running daemon to show live routing table)");
+
+    Ok(())
+}
+
+async fn show_topology(config_path: &str) -> anyhow::Result<()> {
+    println!("Network Topology:");
+    println!("Routers:");
+    println!("{:<15} {:<20} {:<30}", "Router ID", "Name", "Networks");
+    println!("{}", "-".repeat(70));
+
+    println!("\nLinks:");
+    println!("{:<15} {:<15} {:<18} {:<12} {:<8}",
+             "From", "To", "Network", "Bandwidth", "Status");
+    println!("{}", "-".repeat(75));
+
+    println!("(Connect to running daemon to show live topology)");
+
+    Ok(())
+}
+
+async fn show_interfaces(config_path: &str) -> anyhow::Result<()> {
+    let config = RouterConfig::load_from_file(config_path)?;
+
+    println!("Network Interfaces for router {}:", config.router_id);
+    println!("{:<15} {:<15} {:<18} {:<12} {:<8} {:<10}",
+             "Interface", "IP Address", "Network", "Bandwidth", "Enabled", "Routing");
+    println!("{}", "-".repeat(85));
+
+    for (_, interface) in &config.interfaces {
+        println!("{:<15} {:<15} {:<18} {:<12} {:<8} {:<10}",
+                 interface.name,
+                 interface.ip_address,
+                 interface.network,
+                 format_bandwidth(interface.bandwidth),
+                 if interface.enabled { "Yes" } else { "No" },
+                 if interface.include_in_routing { "Yes" } else { "No" }
+        );
+    }
+
+    Ok(())
+}
+
+fn format_bandwidth(bandwidth: u64) -> String {
+    if bandwidth >= 1_000_000_000 {
+        format!("{:.1}Gbps", bandwidth as f64 / 1_000_000_000.0)
+    } else if bandwidth >= 1_000_000 {
+        format!("{:.1}Mbps", bandwidth as f64 / 1_000_000.0)
+    } else if bandwidth >= 1_000 {
+        format!("{:.1}Kbps", bandwidth as f64 / 1_000.0)
+    } else {
+        format!("{}bps", bandwidth)
+    }
 }
