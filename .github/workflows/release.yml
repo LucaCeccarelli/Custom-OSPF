@@ -1,4 +1,4 @@
-name: Release Binary and .deb (Debian Build)
+name: Release Binary and .deb
 
 on:
   push:
@@ -9,62 +9,33 @@ permissions:
   contents: write
 
 jobs:
-  build_on_debian:
+  build:
     runs-on: ubuntu-latest
 
-    container:
-      image: debian:bullseye # Or debian:bookworm
-
     steps:
-      - name: Install prerequisites in container
-        run: |
-          apt-get update
-          # Add ca-certificates here!
-          # git is also explicitly added to ensure it's available before checkout if needed
-          apt-get install -y --no-install-recommends \
-            ca-certificates \
-            git \
-            curl \
-            build-essential \
-            pkg-config \
-            libssl-dev
-          # Optional: Clean up apt cache to reduce layer size, not critical for functionality
-          # apt-get clean && rm -rf /var/lib/apt/lists/*
-
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          target: x86_64-unknown-linux-musl
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
-      - name: Build binary
-        run: cargo build --release
+      - name: Build binary (MUSL)
+        run: cargo build --release --target x86_64-unknown-linux-musl
 
-      - name: Build .deb package
-        run: cargo deb
-
-      - name: Verify .deb package and binary
-        run: |
-          echo "--- Contents of target/release ---"
-          ls -l target/release/
-          echo "--- Contents of target/debian ---"
-          ls -l target/debian/
-          echo "--- Checking GLIBC dependencies of the binary ---"
-          # Use objdump as ldd might not be available or might act differently in some minimal containers for static binaries
-          # If your binary is dynamically linked, ldd is fine.
-          # objdump -p target/release/custom-ospf | grep GLIBC || echo "GLIBC strings not found or objdump error"
-          ldd target/release/custom-ospf || echo "ldd command failed or binary is static"
+      - name: Build .deb package (MUSL)
+        run: cargo deb --target x86_64-unknown-linux-musl
 
       - name: Upload binary and .deb to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/custom-ospf
-            target/debian/*.deb
+            target/x86_64-unknown-linux-musl/release/custom-ospf # Update path for musl target
+            target/x86_64-unknown-linux-musl/debian/*.deb # Update path for musl target
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
