@@ -110,6 +110,10 @@ impl NeighborManager {
             .filter(|n| n.interface == interface)
             .collect()
     }
+
+    pub fn get_all_neighbors(&self) -> Vec<&Neighbor> {
+        self.neighbors.values().collect()
+    }
 }
 
 impl Neighbor {
@@ -139,5 +143,20 @@ impl Neighbor {
 
     pub fn time_since_last_hello(&self) -> Duration {
         Utc::now().signed_duration_since(self.last_hello)
+    }
+
+    pub fn is_expired(&self) -> bool {
+        let elapsed = self.time_since_last_hello();
+        elapsed > Duration::seconds(self.dead_interval as i64)
+    }
+
+    pub fn dead_timer_remaining(&self) -> i64 {
+        let elapsed = self.time_since_last_hello().num_seconds();
+        let dead_time = self.dead_interval as i64;
+        if elapsed >= dead_time {
+            0
+        } else {
+            dead_time - elapsed
+        }
     }
 }
