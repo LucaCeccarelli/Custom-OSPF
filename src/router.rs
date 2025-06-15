@@ -6,9 +6,18 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, error, warn};
 use serde_json;
 use std::fmt::Write;
+use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::protocol::{RoutingProtocol, ProtocolControl};
 use crate::config::RouterConfig;
+use crate::neighbor::{Neighbor, NeighborState};
+
+#[derive(Debug, Clone)]
+pub struct RouterStatus {
+    pub neighbors: HashMap<String, Neighbor>,
+    pub last_update: std::time::Instant,
+}
 
 pub struct Router {
     pub id: String,
@@ -18,6 +27,7 @@ pub struct Router {
     protocol_port: u16,
     is_default_router: bool,
     protocol: Option<Arc<RwLock<RoutingProtocol>>>,
+    status: Arc<RwLock<RouterStatus>>,
 }
 
 impl Router {
@@ -29,6 +39,11 @@ impl Router {
         protocol_port: u16,
         is_default_router: bool,
     ) -> anyhow::Result<Self> {
+        let status = RouterStatus {
+            neighbors: HashMap::new(),
+            last_update: std::time::Instant::now(),
+        };
+
         Ok(Self {
             id,
             name,
@@ -37,6 +52,7 @@ impl Router {
             protocol_port,
             is_default_router,
             protocol: None,
+            status: Arc::new(RwLock::new(status)),
         })
     }
 
@@ -62,6 +78,13 @@ impl Router {
         let control_addr = SocketAddr::from(([0, 0, 0, 0], self.control_port));
         let control_listener = TcpListener::bind(control_addr).await?;
 
+        // Start status updater
+        let status_clone = self.status.clone();
+        let protocol_for_status = protocol.clone();
+        tokio::spawn(async move {
+            Self::status_updater(status_clone, protocol_for_status).await;
+        });
+
         // Start protocol in background
         let protocol_clone = protocol.clone();
         let protocol_task = tokio::spawn(async move {
@@ -76,10 +99,10 @@ impl Router {
         let router_id = self.id.clone();
         let is_default = self.is_default_router;
         let config = self.config.clone();
-        let protocol_for_control = protocol.clone();
+        let status_for_control = self.status.clone();
 
         let control_task = tokio::spawn(async move {
-            Self::run_control_server(control_listener, protocol_control, router_name, router_id, is_default, config, protocol_for_control).await;
+            Self::run_control_server(control_listener, protocol_control, router_name, router_id, is_default, config, status_for_control).await;
         });
 
         // Wait for either task to complete
@@ -95,6 +118,27 @@ impl Router {
         Ok(())
     }
 
+    async fn status_updater(
+        status: Arc<RwLock<RouterStatus>>,
+        protocol: Arc<RwLock<RoutingProtocol>>,
+    ) {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+
+        loop {
+            interval.tick().await;
+
+            // Try to update status without blocking
+            if let Ok(protocol_guard) = protocol.try_read() {
+                let neighbors = protocol_guard.neighbor_manager.get_neighbors().clone();
+
+                if let Ok(mut status_guard) = status.try_write() {
+                    status_guard.neighbors = neighbors;
+                    status_guard.last_update = std::time::Instant::now();
+                }
+            }
+        }
+    }
+
     async fn run_control_server(
         listener: TcpListener,
         protocol_control: tokio::sync::mpsc::Sender<ProtocolControl>,
@@ -102,7 +146,7 @@ impl Router {
         router_id: String,
         is_default_router: bool,
         config: RouterConfig,
-        protocol: Arc<RwLock<RoutingProtocol>>,
+        status: Arc<RwLock<RouterStatus>>,
     ) {
         info!("Control server listening");
 
@@ -115,10 +159,10 @@ impl Router {
                     let id = router_id.clone();
                     let is_default = is_default_router;
                     let cfg = config.clone();
-                    let proto = protocol.clone();
+                    let status_clone = status.clone();
 
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_control_connection(stream, control_tx, name, id, is_default, cfg, proto).await {
+                        if let Err(e) = Self::handle_control_connection(stream, control_tx, name, id, is_default, cfg, status_clone).await {
                             error!("Control connection error: {}", e);
                         }
                     });
@@ -137,7 +181,7 @@ impl Router {
         router_id: String,
         is_default_router: bool,
         config: RouterConfig,
-        protocol: Arc<RwLock<RoutingProtocol>>,
+        status: Arc<RwLock<RouterStatus>>,
     ) -> anyhow::Result<()> {
         let mut buffer = [0; 1024];
 
@@ -154,7 +198,7 @@ impl Router {
                 &router_id,
                 is_default_router,
                 &config,
-                &protocol
+                &status
             ).await;
 
             stream.write_all(response.as_bytes()).await?;
@@ -169,7 +213,7 @@ impl Router {
         router_id: &str,
         is_default_router: bool,
         config: &RouterConfig,
-        protocol: &Arc<RwLock<RoutingProtocol>>,
+        status: &Arc<RwLock<RouterStatus>>,
     ) -> String {
         match command.trim() {
             "ENABLE" => {
@@ -179,13 +223,13 @@ impl Router {
                 "Routing protocol disabled\n".to_string()
             }
             "NEIGHBORS" => {
-                Self::get_neighbors_info(protocol).await
+                Self::get_neighbors_info(status).await
             }
             "ROUTES" => {
                 Self::get_routes_info(config)
             }
             "TOPOLOGY" => {
-                Self::get_topology_info(router_name, router_id, is_default_router, config, protocol).await
+                Self::get_topology_info(router_name, router_id, is_default_router, config, status).await
             }
             "RECALCULATE" => {
                 "Route recalculation triggered\n".to_string()
@@ -196,37 +240,38 @@ impl Router {
         }
     }
 
-    async fn get_neighbors_info(protocol: &Arc<RwLock<RoutingProtocol>>) -> String {
+    async fn get_neighbors_info(status: &Arc<RwLock<RouterStatus>>) -> String {
         let mut output = String::new();
         writeln!(output, "Neighbor Information:").unwrap();
-        writeln!(output, "{:<20} {:<15} {:<10} {:<10} {:<12}",
-                 "Router ID", "IP Address", "State", "Dead Time", "Interface").unwrap();
-        writeln!(output, "{}", "-".repeat(70)).unwrap();
+        writeln!(output, "{:<20} {:<15} {:<10} {:<12} {:<12}",
+                 "Router ID", "IP Address", "State", "Last Hello", "Interface").unwrap();
+        writeln!(output, "{}", "-".repeat(75)).unwrap();
 
-        let protocol_guard = protocol.read().await;
-        let neighbors = protocol_guard.neighbor_manager.get_all_neighbors();
-
+        let status_guard = status.read().await;            
+        let neighbors = &status_guard.neighbors;
         if neighbors.is_empty() {
-            writeln!(output, "No neighbors found").unwrap();
+                writeln!(output, "No neighbors found").unwrap();
         } else {
-            for neighbor in neighbors {
-                let time_since_hello = neighbor.time_since_last_hello();
-                let remaining_time = neighbor.dead_interval as i64 - time_since_hello.num_seconds();
+                for neighbor in neighbors.values() {
+                    let time_since_hello = neighbor.time_since_last_hello();
+                    let last_hello = if time_since_hello.num_seconds() < 60 {
+                        format!("{}s ago", time_since_hello.num_seconds())
+                    } else {
+                        let minutes = time_since_hello.num_minutes();
+                        format!("{}m ago", minutes)
+                    };
 
-                let dead_time = if remaining_time <= 0 {
-                    "DEAD".to_string()
-                } else {
-                    format!("{}s", remaining_time)
-                };
-
-                writeln!(output, "{:<20} {:<15} {:<10} {:<10} {:<12}",
-                         neighbor.router_id,
-                         neighbor.ip_address,
-                         format!("{:?}", neighbor.state),
-                         dead_time,
-                         neighbor.interface).unwrap();
+                    writeln!(output, "{:<20} {:<15} {:<10} {:<12} {:<12}",
+                             neighbor.router_id,
+                             neighbor.ip_address,
+                             format!("{:?}", neighbor.state),
+                             last_hello,
+                             neighbor.interface).unwrap();
+                }
             }
-        }
+
+            let age = status_guard.last_update.elapsed().as_secs();
+            writeln!(output, "\n(Data updated {} seconds ago)", age).unwrap();
 
         output
     }
@@ -259,7 +304,7 @@ impl Router {
         router_id: &str,
         is_default_router: bool,
         config: &RouterConfig,
-        protocol: &Arc<RwLock<RoutingProtocol>>,
+        status: &Arc<RwLock<RouterStatus>>,
     ) -> String {
         let mut output = String::new();
         writeln!(output, "Network Topology:").unwrap();
@@ -278,34 +323,37 @@ impl Router {
         writeln!(output, "{}", "-".repeat(70)).unwrap();
 
         for interface in &config.interfaces {
-            let status = if interface.enabled { "UP" } else { "DOWN" };
+            let status_str = if interface.enabled { "UP" } else { "DOWN" };
             writeln!(output, "{:<15} {:<15} {:<15} {:<8} {:<10}",
                      interface.name,
                      interface.ip_address,
                      interface.network,
                      interface.cost,
-                     status).unwrap();
+                     status_str).unwrap();
         }
 
         // Show neighbors summary
         writeln!(output, "\nNeighbor Summary:").unwrap();
-        let protocol_guard = protocol.read().await;
-        let neighbors = protocol_guard.neighbor_manager.get_all_neighbors();
+
+        let status_guard = status.read().await;            let neighbors = &status_guard.neighbors;
         writeln!(output, "Total Neighbors: {}", neighbors.len()).unwrap();
 
-        let active_neighbors: Vec<_> = neighbors.iter().filter(|n| n.is_active()).collect();
+        let active_neighbors: Vec<_> = neighbors.values().filter(|n| n.is_active()).collect();
         writeln!(output, "Active Neighbors: {}", active_neighbors.len()).unwrap();
 
         if !active_neighbors.is_empty() {
-            writeln!(output, "\nActive Neighbors:").unwrap();
-            for neighbor in active_neighbors {
-                writeln!(output, "  {} ({}) - {}",
-                         neighbor.router_name,
-                         neighbor.router_id,
-                         neighbor.ip_address).unwrap();
+                writeln!(output, "\nActive Neighbors:").unwrap();
+                for neighbor in active_neighbors {
+                    writeln!(output, "  {} ({}) - {} [{}]",
+                             neighbor.router_name,
+                             neighbor.router_id,
+                             neighbor.ip_address,
+                             neighbor.interface).unwrap();
+                }
             }
-        }
 
+        let age = status_guard.last_update.elapsed().as_secs();
+        writeln!(output, "\n(Neighbor data updated {} seconds ago)", age).unwrap();
         output
     }
 }
