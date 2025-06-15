@@ -94,11 +94,17 @@ async fn main() -> anyhow::Result<()> {
             info!("Starting router {} ({})", args.name, args.id);
 
             // Load configuration
-            let config = RouterConfig::load(&args.config).unwrap_or_else(|_| {
-                info!("Creating default configuration");
-                RouterConfig::default()
-            });
-
+            let config = match RouterConfig::load(&args.config) {
+                Ok(config) => {
+                    info!("Successfully loaded configuration from {}", args.config);
+                    config
+                }
+                Err(e) => {
+                    error!("Failed to load configuration from {}: {}", args.config, e);
+                    info!("Using default configuration instead");
+                    RouterConfig::default()
+                }
+            };
             // Create and start router
             let mut router = Router::new(
                 args.id,
