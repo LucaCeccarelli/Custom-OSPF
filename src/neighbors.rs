@@ -11,6 +11,7 @@ use std::{
 use tokio::{
     net::UdpSocket,
     sync::{mpsc, RwLock},
+    time::timeout,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -63,8 +64,8 @@ pub async fn start_discovery(
         anyhow::bail!("Aucune interface IPv4 trouvée dans {:?}", iface_names);
     }
 
-    // 2) Channel pour communication interne (éviter les deadlocks)
-    let (internal_tx, mut internal_rx) = mpsc::unbounded_channel::<InternalMsg>();
+    // 2) Channel pour communication interne avec buffer plus grand
+    let (internal_tx, mut internal_rx) = mpsc::channel::<InternalMsg>(100);
 
     // 3) Socket de réception
     println!("Configuration socket réception...");
@@ -80,7 +81,7 @@ pub async fn start_discovery(
 
     let recv_sock = UdpSocket::from_std(std_sock.into())?;
 
-    // 4) Task de réception (envoie vers channel, pas de RwLock)
+    // 4) Task de réception avec meilleure gestion d'erreurs
     let sysname_recv = sysname.clone();
     let tx_clone = internal_tx.clone();
 
@@ -108,20 +109,25 @@ pub async fn start_discovery(
                         match msg.typ.as_str() {
                             "HELLO" => {
                                 println!("HELLO traité de {}", msg.sysname);
-                                let _ = tx_clone.send(InternalMsg::HelloReceived {
+                                // Utilisation de try_send pour éviter les blocages
+                                match tx_clone.try_send(InternalMsg::HelloReceived {
                                     sysname: msg.sysname.clone(),
                                     ip: src.ip().to_string(),
-                                });
-                                println!("HELLO envoyé au channel");
+                                }) {
+                                    Ok(()) => println!("HELLO envoyé au channel"),
+                                    Err(e) => println!("ERREUR envoi HELLO au channel: {}", e),
+                                }
                             }
                             "LSA" => {
                                 if let Some(neis) = msg.neighbors {
                                     println!("LSA traité de {} ({} voisins)", msg.sysname, neis.len());
-                                    let _ = tx_clone.send(InternalMsg::LsaReceived {
+                                    match tx_clone.try_send(InternalMsg::LsaReceived {
                                         sysname: msg.sysname.clone(),
                                         neighbors: neis,
-                                    });
-                                    println!("LSA envoyé au channel");
+                                    }) {
+                                        Ok(()) => println!("LSA envoyé au channel"),
+                                        Err(e) => println!("ERREUR envoi LSA au channel: {}", e),
+                                    }
                                 }
                             }
                             _ => {}
@@ -132,29 +138,54 @@ pub async fn start_discovery(
                 }
                 Err(e) => {
                     println!("ERREUR recv: {}", e);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
         }
     });
 
-    // 5) Task de traitement des messages internes (seule à modifier les RwLock)
+    // 5) Task de traitement des messages internes avec timeout
     let direct_processor = direct.clone();
     let lsa_processor = lsa.clone();
 
     tokio::spawn(async move {
         println!("PROCESSEUR démarré");
-        while let Some(msg) = internal_rx.recv().await {
-            println!("PROCESS: {:?}", msg);
-            match msg {
-                InternalMsg::HelloReceived { sysname, ip } => {
-                    println!("PROCESS HELLO: {} -> {}", sysname, ip);
-                    direct_processor.write().await.insert(sysname.clone(), ip);
-                    println!("VOISIN AJOUTE: {}", sysname);
+        loop {
+            // Utilisation de timeout pour éviter les blocages
+            match timeout(Duration::from_secs(1), internal_rx.recv()).await {
+                Ok(Some(msg)) => {
+                    println!("PROCESS: {:?}", msg);
+                    match msg {
+                        InternalMsg::HelloReceived { sysname, ip } => {
+                            println!("PROCESS HELLO: {} -> {}", sysname, ip);
+                            // Utilisation de try_write avec timeout
+                            match timeout(Duration::from_millis(100), direct_processor.write()).await {
+                                Ok(mut guard) => {
+                                    guard.insert(sysname.clone(), ip);
+                                    println!("VOISIN AJOUTE: {}", sysname);
+                                }
+                                Err(_) => println!("TIMEOUT lors de l'écriture direct pour {}", sysname),
+                            }
+                        }
+                        InternalMsg::LsaReceived { sysname, neighbors } => {
+                            println!("PROCESS LSA: {} avec {:?}", sysname, neighbors);
+                            match timeout(Duration::from_millis(100), lsa_processor.write()).await {
+                                Ok(mut guard) => {
+                                    guard.insert(sysname.clone(), neighbors.clone());
+                                    println!("LSA AJOUTE: {} -> {:?}", sysname, neighbors);
+                                }
+                                Err(_) => println!("TIMEOUT lors de l'écriture LSA pour {}", sysname),
+                            }
+                        }
+                    }
                 }
-                InternalMsg::LsaReceived { sysname, neighbors } => {
-                    println!("PROCESS LSA: {} avec {:?}", sysname, neighbors);
-                    lsa_processor.write().await.insert(sysname.clone(), neighbors.clone());
-                    println!("LSA AJOUTE: {} -> {:?}", sysname, neighbors);
+                Ok(None) => {
+                    println!("Channel fermé, arrêt du processeur");
+                    break;
+                }
+                Err(_) => {
+                    // Timeout, on continue la boucle pour éviter les blocages
+                    continue;
                 }
             }
         }
@@ -173,7 +204,7 @@ pub async fn start_discovery(
         send_socks.push(sock);
     }
 
-    // 7) Task d'émission
+    // 7) Task d'émission avec meilleure gestion des erreurs
     let direct_emit = direct.clone();
     let sys_emit = sysname.clone();
 
@@ -182,7 +213,7 @@ pub async fn start_discovery(
         println!("EMISSION démarrée vers {}", mcast_addr);
 
         // Attendre un peu avant de commencer
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         loop {
             // HELLO
@@ -202,10 +233,17 @@ pub async fn start_discovery(
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
 
-            // LSA
-            let neighbors = direct_emit.read().await.keys().cloned().collect::<Vec<_>>();
+            // LSA avec timeout pour éviter les blocages
+            let neighbors = match timeout(Duration::from_millis(100), direct_emit.read()).await {
+                Ok(guard) => guard.keys().cloned().collect::<Vec<_>>(),
+                Err(_) => {
+                    println!("TIMEOUT lecture voisins pour LSA");
+                    continue;
+                }
+            };
+
             let lsa_msg = LsaMsg {
                 typ: "LSA".to_string(),
                 sysname: sys_emit.clone(),
@@ -222,11 +260,11 @@ pub async fn start_discovery(
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(7)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
         }
     });
 
-    // 8) Task de debug simple
+    // 8) Task de debug avec timeouts
     let direct_debug = direct.clone();
     let lsa_debug = lsa.clone();
     let sys_debug = sysname.clone();
@@ -236,16 +274,23 @@ pub async fn start_discovery(
 
         loop {
             println!("=== DEBUG {} ===", sys_debug);
-            let direct_map = direct_debug.read().await;
-            println!("Voisins: {:?}", *direct_map);
-            drop(direct_map);
 
-            let lsa_map = lsa_debug.read().await;
-            println!("LSAs: {:?}", *lsa_map);
-            drop(lsa_map);
+            match timeout(Duration::from_millis(100), direct_debug.read()).await {
+                Ok(direct_map) => {
+                    println!("Voisins: {:?}", *direct_map);
+                }
+                Err(_) => println!("TIMEOUT lecture voisins debug"),
+            }
+
+            match timeout(Duration::from_millis(100), lsa_debug.read()).await {
+                Ok(lsa_map) => {
+                    println!("LSAs: {:?}", *lsa_map);
+                }
+                Err(_) => println!("TIMEOUT lecture LSAs debug"),
+            }
 
             println!("=== FIN DEBUG ===");
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            tokio::time::sleep(Duration::from_secs(15)).await;
         }
     });
 
