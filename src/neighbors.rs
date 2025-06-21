@@ -6,10 +6,12 @@ use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddrV4},
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     net::UdpSocket,
     sync::RwLock,
+    time::timeout,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -86,6 +88,8 @@ pub async fn start_discovery(
         loop {
             match recv_sock.recv_from(&mut buf).await {
                 Ok((len, src)) => {
+                    println!("Paquet reçu de {} ({} bytes)", src, len);
+
                     if let Ok(msg) = serde_json::from_slice::<LsaMsg>(&buf[..len]) {
                         // Ne pas traiter nos propres messages
                         if msg.sysname == sysname_for_recv {
@@ -94,24 +98,42 @@ pub async fn start_discovery(
                         }
 
                         println!("Message reçu de {} ({}): {:?}", src, msg.sysname, msg.typ);
+
                         match msg.typ.as_str() {
                             "HELLO" => {
                                 println!("HELLO reçu de {} ({})", msg.sysname, src.ip());
-                                direct_cl.write().await.insert(
-                                    msg.sysname.clone(),
-                                    src.ip().to_string(),
-                                );
+
+                                // Utiliser timeout pour éviter les deadlocks
+                                match timeout(Duration::from_secs(1), direct_cl.write()).await {
+                                    Ok(mut direct_map) => {
+                                        direct_map.insert(
+                                            msg.sysname.clone(),
+                                            src.ip().to_string(),
+                                        );
+                                        println!("Voisin {} ajouté à la table directe", msg.sysname);
+                                    }
+                                    Err(_) => {
+                                        println!("Timeout lors de l'écriture dans direct_cl pour {}", msg.sysname);
+                                    }
+                                }
                             }
                             "LSA" => {
                                 println!("LSA reçu de {}", msg.sysname);
                                 if let Some(neis) = msg.neighbors {
-                                    lsa_cl.write().await.insert(
-                                        msg.sysname.clone(),
-                                        neis,
-                                    );
+                                    match timeout(Duration::from_secs(1), lsa_cl.write()).await {
+                                        Ok(mut lsa_map) => {
+                                            lsa_map.insert(msg.sysname.clone(), neis.clone());
+                                            println!("LSA de {} mis à jour avec voisins: {:?}", msg.sysname, neis);
+                                        }
+                                        Err(_) => {
+                                            println!("Timeout lors de l'écriture dans lsa_cl pour {}", msg.sysname);
+                                        }
+                                    }
                                 }
                             }
-                            _ => {}
+                            _ => {
+                                println!("Type de message inconnu: {}", msg.typ);
+                            }
                         }
                     } else {
                         println!("Erreur décodage message de {}", src);
@@ -166,10 +188,17 @@ pub async fn start_discovery(
             }
 
             // Attendre un peu avant LSA
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
 
-            // LSA
-            let neis = direct_for_emit.read().await.keys().cloned().collect::<Vec<_>>();
+            // LSA avec timeout pour la lecture
+            let neis = match timeout(Duration::from_secs(1), direct_for_emit.read()).await {
+                Ok(direct_map) => direct_map.keys().cloned().collect::<Vec<_>>(),
+                Err(_) => {
+                    println!("Timeout lors de la lecture de direct_for_emit");
+                    Vec::new()
+                }
+            };
+
             let lsa_msg = LsaMsg {
                 typ:       "LSA".into(),
                 sysname:   sys.clone(),
@@ -186,7 +215,37 @@ pub async fn start_discovery(
             }
 
             // Cycle de 10 secondes
-            tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+            tokio::time::sleep(Duration::from_secs(8)).await;
+        }
+    });
+
+    // 5) Task de debug périodique
+    let direct_debug = direct.clone();
+    let lsa_debug = lsa.clone();
+    let sys_debug = sysname.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(15)).await;
+
+            println!("=== DEBUG {} ===", sys_debug);
+            match timeout(Duration::from_secs(1), direct_debug.read()).await {
+                Ok(direct_map) => {
+                    println!("Voisins directs: {:?}", *direct_map);
+                }
+                Err(_) => {
+                    println!("Timeout lecture direct_debug");
+                }
+            }
+
+            match timeout(Duration::from_secs(1), lsa_debug.read()).await {
+                Ok(lsa_map) => {
+                    println!("LSA reçues: {:?}", *lsa_map);
+                }
+                Err(_) => {
+                    println!("Timeout lecture lsa_debug");
+                }
+            }
+            println!("=== FIN DEBUG ===");
         }
     });
 
