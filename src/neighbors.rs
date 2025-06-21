@@ -10,8 +10,7 @@ use std::{
 };
 use tokio::{
     net::UdpSocket,
-    sync::{mpsc, RwLock},
-    time::timeout,
+    sync::RwLock,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -19,13 +18,6 @@ struct LsaMsg {
     typ:       String,
     sysname:   String,
     neighbors: Option<Vec<String>>,
-}
-
-// Messages internes pour éviter les deadlocks
-#[derive(Debug, Clone)]
-enum InternalMsg {
-    HelloReceived { sysname: String, ip: String },
-    LsaReceived { sysname: String, neighbors: Vec<String> },
 }
 
 type DirNeighTable = Arc<RwLock<HashMap<String, String>>>;
@@ -64,10 +56,7 @@ pub async fn start_discovery(
         anyhow::bail!("Aucune interface IPv4 trouvée dans {:?}", iface_names);
     }
 
-    // 2) Channel pour communication interne avec buffer plus grand
-    let (internal_tx, mut internal_rx) = mpsc::channel::<InternalMsg>(100);
-
-    // 3) Socket de réception
+    // 2) Socket de réception
     println!("Configuration socket réception...");
     let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     std_sock.set_reuse_address(true)?;
@@ -81,9 +70,10 @@ pub async fn start_discovery(
 
     let recv_sock = UdpSocket::from_std(std_sock.into())?;
 
-    // 4) Task de réception avec meilleure gestion d'erreurs
+    // 3) Task de réception - TRAITEMENT DIRECT
     let sysname_recv = sysname.clone();
-    let tx_clone = internal_tx.clone();
+    let direct_recv = direct.clone();
+    let lsa_recv = lsa.clone();
 
     tokio::spawn(async move {
         println!("RECEPTION démarrée pour {}", sysname_recv);
@@ -109,26 +99,21 @@ pub async fn start_discovery(
                         match msg.typ.as_str() {
                             "HELLO" => {
                                 println!("HELLO traité de {}", msg.sysname);
-                                // Envoi bloquant pour s'assurer que le message passe
-                                if let Err(e) = internal_tx.send(InternalMsg::HelloReceived {
-                                    sysname: msg.sysname.clone(),
-                                    ip: src.ip().to_string(),
-                                }).await {
-                                    println!("ERREUR envoi HELLO au channel: {}", e);
-                                } else {
-                                    println!("HELLO envoyé au channel");
+                                // TRAITEMENT DIRECT - pas de channel
+                                {
+                                    let mut guard = direct_recv.write().await;
+                                    guard.insert(msg.sysname.clone(), src.ip().to_string());
+                                    println!("VOISIN AJOUTE DIRECTEMENT: {} -> {}", msg.sysname, src.ip());
                                 }
                             }
                             "LSA" => {
                                 if let Some(neis) = msg.neighbors {
                                     println!("LSA traité de {} ({} voisins)", msg.sysname, neis.len());
-                                    if let Err(e) = internal_tx.send(InternalMsg::LsaReceived {
-                                        sysname: msg.sysname.clone(),
-                                        neighbors: neis,
-                                    }).await {
-                                        println!("ERREUR envoi LSA au channel: {}", e);
-                                    } else {
-                                        println!("LSA envoyé au channel");
+                                    // TRAITEMENT DIRECT - pas de channel
+                                    {
+                                        let mut guard = lsa_recv.write().await;
+                                        guard.insert(msg.sysname.clone(), neis.clone());
+                                        println!("LSA AJOUTE DIRECTEMENT: {} -> {:?}", msg.sysname, neis);
                                     }
                                 }
                             }
@@ -146,37 +131,7 @@ pub async fn start_discovery(
         }
     });
 
-    // 5) Task de traitement des messages internes - VERSION SIMPLIFIÉE
-    let direct_processor = direct.clone();
-    let lsa_processor = lsa.clone();
-
-    tokio::spawn(async move {
-        println!("PROCESSEUR démarré");
-        while let Some(msg) = internal_rx.recv().await {
-            println!("PROCESS: {:?}", msg);
-            match msg {
-                InternalMsg::HelloReceived { sysname, ip } => {
-                    println!("PROCESS HELLO: {} -> {}", sysname, ip);
-                    {
-                        let mut guard = direct_processor.write().await;
-                        guard.insert(sysname.clone(), ip);
-                        println!("VOISIN AJOUTE: {}", sysname);
-                    }
-                }
-                InternalMsg::LsaReceived { sysname, neighbors } => {
-                    println!("PROCESS LSA: {} avec {:?}", sysname, neighbors);
-                    {
-                        let mut guard = lsa_processor.write().await;
-                        guard.insert(sysname.clone(), neighbors.clone());
-                        println!("LSA AJOUTE: {} -> {:?}", sysname, neighbors);
-                    }
-                }
-            }
-        }
-        println!("PROCESSEUR arrêté");
-    });
-
-    // 6) Sockets d'émission
+    // 4) Sockets d'émission
     let mut send_socks = Vec::new();
     for (_name, local_ip) in &ifs {
         let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
@@ -189,7 +144,7 @@ pub async fn start_discovery(
         send_socks.push(sock);
     }
 
-    // 7) Task d'émission avec meilleure gestion des erreurs
+    // 5) Task d'émission
     let direct_emit = direct.clone();
     let sys_emit = sysname.clone();
 
@@ -220,7 +175,7 @@ pub async fn start_discovery(
 
             tokio::time::sleep(Duration::from_secs(5)).await;
 
-            // LSA - Version simplifiée sans timeout
+            // LSA
             let neighbors = {
                 let guard = direct_emit.read().await;
                 guard.keys().cloned().collect::<Vec<_>>()
@@ -246,7 +201,7 @@ pub async fn start_discovery(
         }
     });
 
-    // 8) Task de debug simplifiée
+    // 6) Task de debug
     let direct_debug = direct.clone();
     let lsa_debug = lsa.clone();
     let sys_debug = sysname.clone();
