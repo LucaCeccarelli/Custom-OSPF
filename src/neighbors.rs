@@ -10,8 +10,7 @@ use std::{
 };
 use tokio::{
     net::UdpSocket,
-    sync::RwLock,
-    time::timeout,
+    sync::{mpsc, RwLock},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -19,6 +18,13 @@ struct LsaMsg {
     typ:       String,
     sysname:   String,
     neighbors: Option<Vec<String>>,
+}
+
+// Messages internes pour éviter les deadlocks
+#[derive(Debug, Clone)]
+enum InternalMsg {
+    HelloReceived { sysname: String, ip: String },
+    LsaReceived { sysname: String, neighbors: Vec<String> },
 }
 
 type DirNeighTable = Arc<RwLock<HashMap<String, String>>>;
@@ -39,20 +45,15 @@ pub async fn start_discovery(
     let direct = Arc::new(RwLock::new(HashMap::new()));
     let lsa    = Arc::new(RwLock::new(HashMap::new()));
 
-    println!("=== Démarrage discovery pour {} sur interfaces {:?} ===", sysname, iface_names);
+    println!("=== DEBUT {} ===", sysname);
 
     // 1) Récupère les IPv4 des interfaces
     let mut ifs = Vec::new();
     let all_ifs = get_if_addrs()?;
-    println!("Interfaces disponibles:");
-    for iface in &all_ifs {
-        println!("  - {} : {:?}", iface.name, iface.addr);
-    }
-
     for iface in all_ifs {
         if let IfAddr::V4(v4) = iface.addr {
             if iface_names.contains(&iface.name) {
-                println!("Interface sélectionnée: {} -> {}", iface.name, v4.ip);
+                println!("Interface: {} -> {}", iface.name, v4.ip);
                 ifs.push((iface.name.clone(), v4.ip));
             }
         }
@@ -62,246 +63,192 @@ pub async fn start_discovery(
         anyhow::bail!("Aucune interface IPv4 trouvée dans {:?}", iface_names);
     }
 
-    // 2) Socket de réception PARTAGÉE
-    println!("=== Configuration socket réception partagée sur port {} ===", port);
+    // 2) Channel pour communication interne (éviter les deadlocks)
+    let (internal_tx, mut internal_rx) = mpsc::unbounded_channel::<InternalMsg>();
+
+    // 3) Socket de réception
+    println!("Configuration socket réception...");
     let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-
-    // CRUCIAL: Permettre le partage du port
     std_sock.set_reuse_address(true)?;
-    #[cfg(unix)]
-    std_sock.set_reuse_port(true)?;
-
-    // Bind sur INADDR_ANY pour recevoir de partout
+    #[cfg(unix)] std_sock.set_reuse_port(true)?;
     std_sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())?;
 
-    // Join le multicast sur TOUTES nos interfaces
     for (_name, local_ip) in &ifs {
-        println!("Join multicast 224.0.0.5 sur interface {}", local_ip);
-        match std_sock.join_multicast_v4(&MCAST_ADDR.parse()?, local_ip) {
-            Ok(_) => println!("  ✓ Joint avec succès sur {}", local_ip),
-            Err(e) => println!("  ✗ Erreur join sur {}: {}", local_ip, e),
-        }
+        std_sock.join_multicast_v4(&MCAST_ADDR.parse()?, local_ip)?;
+        println!("Joint multicast sur {}", local_ip);
     }
 
     let recv_sock = UdpSocket::from_std(std_sock.into())?;
 
-    // 3) Task de réception avec debug détaillé
-    let direct_cl = direct.clone();
-    let lsa_cl = lsa.clone();
-    let sysname_for_recv = sysname.clone();
+    // 4) Task de réception (envoie vers channel, pas de RwLock)
+    let sysname_recv = sysname.clone();
+    let tx_clone = internal_tx.clone();
 
     tokio::spawn(async move {
-        println!("=== Task réception démarrée pour {} ===", sysname_for_recv);
+        println!("RECEPTION démarrée pour {}", sysname_recv);
         let mut buf = [0u8; 2048];
-        let mut packet_count = 0;
+        let mut count = 0;
 
         loop {
             match recv_sock.recv_from(&mut buf).await {
                 Ok((len, src)) => {
-                    packet_count += 1;
-                    println!("📦 PAQUET #{} de {} ({} bytes)", packet_count, src, len);
+                    count += 1;
+                    println!("PAQUET #{} de {} ({} bytes)", count, src, len);
 
                     if let Ok(msg) = serde_json::from_slice::<LsaMsg>(&buf[..len]) {
-                        println!("📋 Message: type={}, sysname={}", msg.typ, msg.sysname);
+                        println!("MSG: {} de {}", msg.typ, msg.sysname);
 
-                        // Ne pas traiter nos propres messages
-                        if msg.sysname == sysname_for_recv {
-                            println!("🚫 Ignorer notre propre message de {}", msg.sysname);
+                        if msg.sysname == sysname_recv {
+                            println!("IGNORE notre message");
                             continue;
                         }
 
-                        println!("✅ Message externe de {} ({}): {}", msg.sysname, src.ip(), msg.typ);
+                        println!("TRAITE message de {}", msg.sysname);
 
                         match msg.typ.as_str() {
                             "HELLO" => {
-                                println!("👋 Traitement HELLO de {} ({})", msg.sysname, src.ip());
-
-                                match timeout(Duration::from_millis(500), direct_cl.write()).await {
-                                    Ok(mut direct_map) => {
-                                        direct_map.insert(
-                                            msg.sysname.clone(),
-                                            src.ip().to_string(),
-                                        );
-                                        println!("✅ Voisin {} ajouté (IP: {})", msg.sysname, src.ip());
-                                    }
-                                    Err(_) => {
-                                        println!("⏰ Timeout écriture direct_cl pour {}", msg.sysname);
-                                    }
-                                }
+                                println!("HELLO traité de {}", msg.sysname);
+                                let _ = tx_clone.send(InternalMsg::HelloReceived {
+                                    sysname: msg.sysname.clone(),
+                                    ip: src.ip().to_string(),
+                                });
+                                println!("HELLO envoyé au channel");
                             }
                             "LSA" => {
-                                println!("📊 Traitement LSA de {}", msg.sysname);
-                                if let Some(neis) = &msg.neighbors {
-                                    match timeout(Duration::from_millis(500), lsa_cl.write()).await {
-                                        Ok(mut lsa_map) => {
-                                            lsa_map.insert(msg.sysname.clone(), neis.clone());
-                                            println!("✅ LSA de {} mis à jour avec {} voisins: {:?}",
-                                                     msg.sysname, neis.len(), neis);
-                                        }
-                                        Err(_) => {
-                                            println!("⏰ Timeout écriture lsa_cl pour {}", msg.sysname);
-                                        }
-                                    }
+                                if let Some(neis) = msg.neighbors {
+                                    println!("LSA traité de {} ({} voisins)", msg.sysname, neis.len());
+                                    let _ = tx_clone.send(InternalMsg::LsaReceived {
+                                        sysname: msg.sysname.clone(),
+                                        neighbors: neis,
+                                    });
+                                    println!("LSA envoyé au channel");
                                 }
                             }
-                            _ => {
-                                println!("❓ Type message inconnu: {}", msg.typ);
-                            }
+                            _ => {}
                         }
                     } else {
-                        println!("❌ Erreur décodage JSON de {}", src);
+                        println!("ERREUR decode de {}", src);
                     }
                 }
                 Err(e) => {
-                    println!("💥 Erreur réception: {}", e);
+                    println!("ERREUR recv: {}", e);
                 }
             }
         }
     });
 
-    // 4) Sockets d'émission (une par interface)
-    let mut send_socks = Vec::new();
-    for (name, local_ip) in &ifs {
-        println!("=== Configuration socket émission sur {} ({}) ===", name, local_ip);
+    // 5) Task de traitement des messages internes (seule à modifier les RwLock)
+    let direct_processor = direct.clone();
+    let lsa_processor = lsa.clone();
 
+    tokio::spawn(async move {
+        println!("PROCESSEUR démarré");
+        while let Some(msg) = internal_rx.recv().await {
+            println!("PROCESS: {:?}", msg);
+            match msg {
+                InternalMsg::HelloReceived { sysname, ip } => {
+                    println!("PROCESS HELLO: {} -> {}", sysname, ip);
+                    direct_processor.write().await.insert(sysname.clone(), ip);
+                    println!("VOISIN AJOUTE: {}", sysname);
+                }
+                InternalMsg::LsaReceived { sysname, neighbors } => {
+                    println!("PROCESS LSA: {} avec {:?}", sysname, neighbors);
+                    lsa_processor.write().await.insert(sysname.clone(), neighbors.clone());
+                    println!("LSA AJOUTE: {} -> {:?}", sysname, neighbors);
+                }
+            }
+        }
+    });
+
+    // 6) Sockets d'émission
+    let mut send_socks = Vec::new();
+    for (_name, local_ip) in &ifs {
         let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
         std_sock.set_reuse_address(true)?;
-        #[cfg(unix)]
-        std_sock.set_reuse_port(true)?;
-
-        // Bind sur l'IP locale (pas sur 0.0.0.0)
+        #[cfg(unix)] std_sock.set_reuse_port(true)?;
         std_sock.bind(&SocketAddrV4::new(*local_ip, 0).into())?;
-
-        // Configurer l'interface multicast sortante
         std_sock.set_multicast_if_v4(local_ip)?;
-        std_sock.set_multicast_ttl_v4(2)?; // TTL=2 pour traverser un switch
-
+        std_sock.set_multicast_ttl_v4(2)?;
         let sock = UdpSocket::from_std(std_sock.into())?;
-        send_socks.push((name.clone(), sock));
-        println!("✅ Socket émission OK sur {} ({})", name, local_ip);
+        send_socks.push(sock);
     }
 
-    // 5) Task d'émission périodique
-    let direct_for_emit = direct.clone();
-    let sys_for_emit = sysname.clone();
+    // 7) Task d'émission
+    let direct_emit = direct.clone();
+    let sys_emit = sysname.clone();
 
     tokio::spawn(async move {
         let mcast_addr: SocketAddrV4 = format!("{}:{}", MCAST_ADDR, port).parse().unwrap();
-        println!("=== Task émission démarrée vers {} ===", mcast_addr);
+        println!("EMISSION démarrée vers {}", mcast_addr);
 
-        // Attendre 2 secondes avant de commencer
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        // Attendre un peu avant de commencer
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
         loop {
             // HELLO
             let hello = LsaMsg {
-                typ:       "HELLO".to_string(),
-                sysname:   sys_for_emit.clone(),
+                typ: "HELLO".to_string(),
+                sysname: sys_emit.clone(),
                 neighbors: None,
             };
 
-            match serde_json::to_vec(&hello) {
-                Ok(data) => {
-                    println!("📤 Envoi HELLO de {} ({} bytes)", sys_for_emit, data.len());
-
-                    for (iface_name, sock) in &send_socks {
-                        match sock.send_to(&data, mcast_addr).await {
-                            Ok(n) => println!("  ✅ HELLO envoyé sur {} ({} bytes)", iface_name, n),
-                            Err(e) => println!("  ❌ Erreur HELLO sur {}: {}", iface_name, e),
-                        }
+            if let Ok(data) = serde_json::to_vec(&hello) {
+                println!("ENVOI HELLO de {}", sys_emit);
+                for (i, sock) in send_socks.iter().enumerate() {
+                    match sock.send_to(&data, mcast_addr).await {
+                        Ok(_) => println!("HELLO OK sur socket {}", i),
+                        Err(e) => println!("HELLO ERR sur socket {}: {}", i, e),
                     }
                 }
-                Err(e) => println!("❌ Erreur sérialisation HELLO: {}", e),
             }
 
-            // Attendre 2 secondes puis envoyer LSA
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(3)).await;
 
-            let neighbors = match timeout(Duration::from_millis(500), direct_for_emit.read()).await {
-                Ok(direct_map) => direct_map.keys().cloned().collect::<Vec<_>>(),
-                Err(_) => {
-                    println!("⏰ Timeout lecture neighbors pour LSA");
-                    Vec::new()
-                }
-            };
-
+            // LSA
+            let neighbors = direct_emit.read().await.keys().cloned().collect::<Vec<_>>();
             let lsa_msg = LsaMsg {
-                typ:       "LSA".to_string(),
-                sysname:   sys_for_emit.clone(),
+                typ: "LSA".to_string(),
+                sysname: sys_emit.clone(),
                 neighbors: Some(neighbors.clone()),
             };
 
-            match serde_json::to_vec(&lsa_msg) {
-                Ok(data) => {
-                    println!("📤 Envoi LSA de {} avec {} voisins: {:?}",
-                             sys_for_emit, neighbors.len(), neighbors);
-
-                    for (iface_name, sock) in &send_socks {
-                        match sock.send_to(&data, mcast_addr).await {
-                            Ok(n) => println!("  ✅ LSA envoyé sur {} ({} bytes)", iface_name, n),
-                            Err(e) => println!("  ❌ Erreur LSA sur {}: {}", iface_name, e),
-                        }
+            if let Ok(data) = serde_json::to_vec(&lsa_msg) {
+                println!("ENVOI LSA de {} avec {:?}", sys_emit, neighbors);
+                for (i, sock) in send_socks.iter().enumerate() {
+                    match sock.send_to(&data, mcast_addr).await {
+                        Ok(_) => println!("LSA OK sur socket {}", i),
+                        Err(e) => println!("LSA ERR sur socket {}: {}", i, e),
                     }
                 }
-                Err(e) => println!("❌ Erreur sérialisation LSA: {}", e),
             }
 
-            // Cycle de 10 secondes total (2s HELLO + 2s LSA + 6s pause)
-            tokio::time::sleep(Duration::from_secs(6)).await;
+            tokio::time::sleep(Duration::from_secs(7)).await;
         }
     });
 
-    // 6) Task de debug périodique
+    // 8) Task de debug simple
     let direct_debug = direct.clone();
     let lsa_debug = lsa.clone();
     let sys_debug = sysname.clone();
 
     tokio::spawn(async move {
-        // Premier debug après 8 secondes
-        tokio::time::sleep(Duration::from_secs(8)).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
 
         loop {
-            println!("=== 🔍 DEBUG {} ===", sys_debug);
+            println!("=== DEBUG {} ===", sys_debug);
+            let direct_map = direct_debug.read().await;
+            println!("Voisins: {:?}", *direct_map);
+            drop(direct_map);
 
-            match timeout(Duration::from_millis(500), direct_debug.read()).await {
-                Ok(direct_map) => {
-                    if direct_map.is_empty() {
-                        println!("👥 Aucun voisin direct");
-                    } else {
-                        println!("👥 Voisins directs ({}):", direct_map.len());
-                        for (name, ip) in direct_map.iter() {
-                            println!("  - {} -> {}", name, ip);
-                        }
-                    }
-                }
-                Err(_) => {
-                    println!("⏰ Timeout lecture direct_debug");
-                }
-            }
+            let lsa_map = lsa_debug.read().await;
+            println!("LSAs: {:?}", *lsa_map);
+            drop(lsa_map);
 
-            match timeout(Duration::from_millis(500), lsa_debug.read()).await {
-                Ok(lsa_map) => {
-                    if lsa_map.is_empty() {
-                        println!("📊 Aucune LSA reçue");
-                    } else {
-                        println!("📊 LSA reçues ({}):", lsa_map.len());
-                        for (name, neighbors) in lsa_map.iter() {
-                            println!("  - {} a {} voisins: {:?}", name, neighbors.len(), neighbors);
-                        }
-                    }
-                }
-                Err(_) => {
-                    println!("⏰ Timeout lecture lsa_debug");
-                }
-            }
-
-            println!("=== 🔍 FIN DEBUG ===\n");
-
-            // Debug toutes les 15 secondes
-            tokio::time::sleep(Duration::from_secs(15)).await;
+            println!("=== FIN DEBUG ===");
+            tokio::time::sleep(Duration::from_secs(10)).await;
         }
     });
 
-    println!("✅ Discovery initialisé pour {}", sysname);
+    println!("=== {} PRET ===", sysname);
     Ok(Discovery { direct, lsa })
 }
