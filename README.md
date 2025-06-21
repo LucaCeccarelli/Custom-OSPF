@@ -47,10 +47,11 @@ Commandes principales
    ```bash
    sudo target/release/rust_router \
      run \
-     --interfaces 10.0.0.1 \
-     --interfaces 192.168.1.1 \
-     --sysname R1 \
-     --hello-port 5000
+      --interfaces eth0 \
+      --interfaces br0 \
+      --hello-port 5000 \
+      --sysname R1 \
+      --hello-port 5000
    ```
 
 2) enable  
