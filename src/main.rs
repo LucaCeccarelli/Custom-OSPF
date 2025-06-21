@@ -32,61 +32,63 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     println!("Démarrage {} sur interfaces {:?}", cli.sysname, cli.interfaces);
 
-    // MODIFICATION FONDAMENTALE : Passage à un runtime multi-threadé
-    let rt = Builder::new_multi_thread() // AU LIEU DE new_current_thread()
+    let rt = Builder::new_multi_thread()
         .enable_all()
         .build()?;
 
     rt.block_on(async {
-        // Création du canal de notification pour la réactivité
+        // Canal watch pour notifier changements topo
         let (tx, mut rx) = watch::channel(());
 
         let discovery = start_discovery(
             cli.sysname.clone(),
             cli.interfaces.clone(),
             cli.hello_port,
-            tx, // On passe l'émetteur à la fonction de découverte
+            tx,
         ).await?;
 
         let mut installed_routes: HashSet<(Ipv4Addr, Ipv4Addr)> = HashSet::new();
 
         loop {
-            // Utilisation de `select!` pour être réactif aux changements
-            // tout en gardant une boucle de maintenance.
+            // Attendre soit notification de changement soit timeout périodique
             tokio::select! {
                 _ = rx.changed() => {
                     println!("\n=== Changement de topologie détecté, nouveau calcul de routes ===");
                 }
                 _ = tokio::time::sleep(Duration::from_secs(30)) => {
-                    println!("\n=== Pas de changement en 30s, cycle de maintenance périodique ===");
+                    println!("\n=== Cycle périodique de recalcul (30s) ===");
                 }
             }
 
-            let direct_map_guard = discovery.direct.read().await;
-            let lsa_map_guard = discovery.lsa.read().await;
+            // Verrouiller et cloner pour accès hors lock
+            let direct_map = {
+                let guard = discovery.direct.read().await;
+                guard.clone()
+            };
 
-            println!("Voisins directs: {:?}", *direct_map_guard);
-            println!("LSAs reçus: {:?}", *lsa_map_guard);
+            let lsa_map = {
+                let guard = discovery.lsa.read().await;
+                guard.clone()
+            };
 
-            // On peut maintenant passer les données (gardes ou clones) aux fonctions
+            println!("Voisins directs: {:?}", direct_map);
+            println!("LSAs reçus: {:?}", lsa_map);
+
             let graph = build_graph(&discovery.lsa).await;
-            println!("Graphe construit avec {} nœuds et {} arêtes", graph.node_count(), graph.edge_count());
+            println!("Graphe construit : {} nœuds, {} arêtes", graph.node_count(), graph.edge_count());
 
             let routes = compute_best_paths(&graph);
-            println!("Routes calculées: {}", routes.len());
+            println!("Routes calculées : {}", routes.len());
 
             let mut new_routes: HashSet<(Ipv4Addr, Ipv4Addr)> = HashSet::new();
 
             for (src_sys, dst_sys, path) in routes {
-                // On ne s'occupe que des routes partant de nous-mêmes
                 if path.len() >= 2 && src_sys == cli.sysname {
                     let next_hop_sys = &path[1];
 
-                    // L'IP de la destination finale et du prochain saut doit être trouvée
-                    // via la table des voisins directs, car ce sont les seuls dont on connait l'IP
                     if let (Some(dst_ip_str), Some(gw_str)) = (
-                        direct_map_guard.get(&dst_sys),
-                        direct_map_guard.get(next_hop_sys),
+                        direct_map.get(&dst_sys),
+                        direct_map.get(next_hop_sys),
                     ) {
                         if let (Ok(dst_ip), Ok(gw_ip)) = (
                             dst_ip_str.parse::<Ipv4Addr>(),
@@ -108,7 +110,7 @@ fn main() -> Result<()> {
                 }
             }
 
-            // Supprimer les routes qui ne sont plus nécessaires
+            // Supprimer routes obsolètes
             let to_remove: Vec<_> = installed_routes.difference(&new_routes).cloned().collect();
             for (dst_ip, gw_ip) in to_remove {
                 println!("SUPPRESSION route obsolète: dest {}", dst_ip);
