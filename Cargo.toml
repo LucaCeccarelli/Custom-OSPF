@@ -7,15 +7,10 @@ license = "MIT"
 authors = ["Luca Ceccarelli <luca.ceccarelli@etu.mines-ales.fr>"]
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-petgraph = "0.6"
-rtnetlink = "0.9"
 clap = { version = "4.0", features = ["derive"] }
-anyhow = "1.0.98"
-socket2 = "0.5.10"
-get_if_addrs = "0.5"
-tokio-stream = "0.1"
-futures = "0.3.31"
-pnet = "0.34.0"
+log = "0.4"
+env_logger = "0.10"
+ipnetwork = "0.20"
