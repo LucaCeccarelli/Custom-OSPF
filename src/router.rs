@@ -1,8 +1,7 @@
 use crate::network::{InterfaceInfo, Network};
 use crate::routing_table::{RouteEntry, RouteSource, RoutingTable};
-use ipnetwork::Ipv4Network;
+use log::{info, warn};
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
 
 #[derive(Debug, Clone)]
 pub struct RouterInfo {
@@ -10,77 +9,45 @@ pub struct RouterInfo {
     pub interfaces: HashMap<String, InterfaceInfo>,
 }
 
-#[derive(Debug)]
 pub struct Router {
     pub id: String,
-    pub routing_table: RoutingTable,
-    pub network: Network,
     pub interfaces: HashMap<String, InterfaceInfo>,
+    pub routing_table: RoutingTable,
+    network: Network,
 }
 
 impl Router {
-    pub fn new(id: String, mut network: Network, interface_names: Vec<String>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        id: String,
+        mut network: Network,
+        interface_names: Vec<String>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        info!("Creating router {}", id);
+
         network.discover_interfaces(&interface_names)?;
         let interfaces = network.get_interfaces().clone();
 
-        let mut router = Router {
-            id,
-            routing_table: RoutingTable::new(),
-            network,
-            interfaces,
-        };
+        let mut routing_table = RoutingTable::new();
 
-        // Ajouter les routes directement connectées
-        router.add_connected_routes();
-
-        Ok(router)
-    }
-
-    fn add_connected_routes(&mut self) {
-        for (_, interface) in &self.interfaces {
+        // Ajouter les routes directes
+        for (name, interface_info) in &interfaces {
             let route = RouteEntry {
-                destination: interface.network,
-                next_hop: Ipv4Addr::new(0, 0, 0, 0), // Route directe
-                interface: interface.name.clone(),
+                destination: interface_info.network,
+                next_hop: std::net::Ipv4Addr::new(0, 0, 0, 0), // Route directe
+                interface: name.clone(),
                 metric: 0,
-                source: RouteSource::Connected,
+                source: RouteSource::Direct,
             };
-            self.routing_table.add_route(route);
-        }
-    }
 
-    pub fn update_routing_table(&mut self, routes: Vec<RouteEntry>) -> Result<(), Box<dyn std::error::Error>> {
-        // Supprimer les anciennes routes du protocole
-        self.routing_table.clear_protocol_routes();
-
-        // Ajouter les routes connectées
-        self.add_connected_routes();
-
-        // Ajouter les nouvelles routes du protocole
-        for route in routes {
-            if route.source == RouteSource::Protocol {
-                self.routing_table.add_route(route);
-            }
+            routing_table.add_route(route)?; // Maintenant ça fonctionne car add_route retourne Result
         }
 
-        // Appliquer les changements au système
-        self.apply_routes_to_system()?;
-
-        Ok(())
-    }
-
-    fn apply_routes_to_system(&self) -> Result<(), Box<dyn std::error::Error>> {
-        for route in self.routing_table.get_routes() {
-            if route.source == RouteSource::Protocol {
-                self.network.add_route(
-                    route.destination,
-                    route.next_hop,
-                    &route.interface,
-                    route.metric,
-                )?;
-            }
-        }
-        Ok(())
+        Ok(Router {
+            id,
+            interfaces,
+            routing_table,
+            network,
+        })
     }
 
     pub fn get_router_info(&self) -> RouterInfo {
@@ -88,5 +55,17 @@ impl Router {
             router_id: self.id.clone(),
             interfaces: self.interfaces.clone(),
         }
+    }
+
+    pub fn update_routing_table(&mut self, new_routes: Vec<RouteEntry>) -> Result<(), Box<dyn std::error::Error>> {
+        for route in new_routes {
+            // Vérifier si une meilleure route existe déjà
+            if !self.routing_table.has_better_route(&route) {
+                // Ajouter la route (elle gèrera elle-même l'ajout système)
+                self.routing_table.add_route(route)?;
+            }
+        }
+
+        Ok(())
     }
 }
