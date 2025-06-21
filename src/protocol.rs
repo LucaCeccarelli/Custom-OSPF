@@ -33,12 +33,12 @@ pub struct HelloMessage {
 
 pub struct SimpleRoutingProtocol {
     router: Arc<Mutex<Router>>,
-    sockets: Vec<UdpSocket>,  // Un socket par interface
+    sockets: Vec<Arc<UdpSocket>>,
     neighbors: Arc<Mutex<HashMap<String, (SocketAddr, RouterInfo)>>>,
     sequence: Arc<Mutex<u64>>,
     port: u16,
     debug_mode: bool,
-    our_ips: HashSet<Ipv4Addr>,  // Nos propres IPs pour filtrer les loopbacks
+    our_ips: HashSet<Ipv4Addr>,
 }
 
 impl SimpleRoutingProtocol {
@@ -67,7 +67,7 @@ impl SimpleRoutingProtocol {
                 Ok(socket) => {
                     socket.set_broadcast(true)?;
                     info!("✓ Socket bound to {} on interface {}", bind_addr, interface.name);
-                    sockets.push(socket);
+                    sockets.push(Arc::new(socket)); // Wrap in Arc
                     our_ips.insert(interface.ip);
                 }
                 Err(e) => {
@@ -77,7 +77,7 @@ impl SimpleRoutingProtocol {
                     let socket = UdpSocket::bind(&fallback_addr).await?;
                     socket.set_broadcast(true)?;
                     info!("✓ Fallback socket bound to {} for interface {}", fallback_addr, interface.name);
-                    sockets.push(socket);
+                    sockets.push(Arc::new(socket)); // Wrap in Arc
                     our_ips.insert(interface.ip);
                 }
             }
@@ -317,7 +317,7 @@ impl SimpleRoutingProtocol {
         let mut tasks = Vec::new();
 
         for (i, socket) in self.sockets.iter().enumerate() {
-            let socket_ref = socket;
+            let socket_clone = socket.clone(); 
             let router_clone = router.clone();
             let neighbors_clone = neighbors.clone();
             let our_ips_clone = self.our_ips.clone();
@@ -326,12 +326,14 @@ impl SimpleRoutingProtocol {
                 let mut buffer = [0u8; 4096];
 
                 loop {
-                    match socket_ref.recv_from(&mut buffer).await {
+                    match socket_clone.recv_from(&mut buffer).await { // Use socket_clone
                         Ok((len, addr)) => {
                             // Filtrer les messages de nos propres IPs (anti-loopback)
-                            if our_ips_clone.contains(&addr.ip()) {
-                                debug!("Ignoring loopback message from our own IP: {}", addr.ip());
-                                continue;
+                            if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
+                                if our_ips_clone.contains(&ipv4_addr) {
+                                    debug!("Ignoring loopback message from our own IP: {}", addr.ip());
+                                    continue;
+                                }
                             }
 
                             let data = String::from_utf8_lossy(&buffer[..len]);
