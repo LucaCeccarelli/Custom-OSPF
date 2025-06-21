@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tokio::sync::watch;
 use tokio::{
     net::UdpSocket,
     sync::RwLock,
@@ -34,6 +35,7 @@ pub async fn start_discovery(
     sysname:     String,
     iface_names: Vec<String>,
     port:        u16,
+    notifier:    watch::Sender<()>,
 ) -> Result<Discovery> {
     let direct = Arc::new(RwLock::new(HashMap::new()));
     let lsa    = Arc::new(RwLock::new(HashMap::new()));
@@ -74,6 +76,7 @@ pub async fn start_discovery(
     let sysname_recv = sysname.clone();
     let direct_recv = direct.clone();
     let lsa_recv = lsa.clone();
+    let notifier_recv = notifier.clone();
 
     tokio::spawn(async move {
         println!("RECEPTION démarrée pour {}", sysname_recv);
@@ -109,11 +112,19 @@ pub async fn start_discovery(
                             "LSA" => {
                                 if let Some(neis) = msg.neighbors {
                                     println!("LSA traité de {} ({} voisins)", msg.sysname, neis.len());
-                                    // TRAITEMENT DIRECT - pas de channel
+                                    let mut is_new_data = false;
                                     {
                                         let mut guard = lsa_recv.write().await;
-                                        guard.insert(msg.sysname.clone(), neis.clone());
-                                        println!("LSA AJOUTE DIRECTEMENT: {} -> {:?}", msg.sysname, neis);
+                                        // On vérifie si les données sont vraiment nouvelles avant de notifier
+                                        if guard.get(&msg.sysname) != Some(&neis) {
+                                            guard.insert(msg.sysname.clone(), neis.clone());
+                                            is_new_data = true;
+                                            println!("LSA AJOUTE/MIS A JOUR: {} -> {:?}", msg.sysname, neis);
+                                        }
+                                    }
+                                    if is_new_data {
+                                        // Notifier la boucle principale SEULEMENT si un changement a eu lieu
+                                        let _ = notifier_recv.send(());
                                     }
                                 }
                             }
