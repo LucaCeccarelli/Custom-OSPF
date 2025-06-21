@@ -1,33 +1,32 @@
-use petgraph::{Graph, Undirected};
-use std::collections::HashMap;
-use crate::neighbors::LsaTable;
+use std::collections::{HashMap, HashSet};
+use crate::neighbors::NeighborManager;
+use crate::routing::compute_routes;
 
-/// Graphe dynamique : chaque nœud est un `String` (= sysname)
-pub type TopoGraph = Graph<String, (), Undirected>;
+#[derive(Clone)]
+pub struct NetworkGraph {
+    sysname: String,
+    graph: HashMap<String, Vec<String>>,
+}
 
-/// Reconstruit le graphe à partir des LSAs reçus
-pub async fn build_graph(lsa_tab: &LsaTable) -> TopoGraph {
-    let lsa_map = lsa_tab.read().await;
-    let mut g = Graph::<String, (), Undirected>::new_undirected();
-    let mut idx: HashMap<String, _> = HashMap::new();
-
-    // 1) nœuds
-    for sys in lsa_map.keys() {
-        let ni = g.add_node(sys.clone());
-        idx.insert(sys.clone(), ni);
-    }
-    // 2) arêtes
-    for (sys, neis) in lsa_map.iter() {
-        if let Some(&si) = idx.get(sys) {
-            for nei in neis {
-                if let Some(&di) = idx.get(nei) {
-                    // pour éviter duplicata, n’ajoute que si si < di
-                    if si.index() < di.index() {
-                        g.add_edge(si, di, ());
-                    }
-                }
-            }
+impl NetworkGraph {
+    pub fn new(sysname: String) -> Self {
+        Self {
+            sysname,
+            graph: HashMap::new(),
         }
     }
-    g
+
+    pub fn update(&mut self, node: String, neighbors: Vec<String>) {
+        self.graph.insert(node, neighbors);
+    }
+
+    pub fn recalculate_routes(&self, neighbor_mgr: &NeighborManager, local: &str) {
+        let mut graph = self.graph.clone();
+        graph.insert(local.to_string(), neighbor_mgr.current());
+        let routes = compute_routes(&graph, local);
+        println!("=== Changement de topologie détecté, nouveau calcul de routes ===");
+        for (dest, path) in routes {
+            println!("Route vers {} via {:?}", dest, path);
+        }
+    }
 }

@@ -1,23 +1,26 @@
-use petgraph::algo::astar;
-use crate::network::TopoGraph;
+use std::collections::{HashMap, VecDeque};
 
-/// Pour chaque paire (src, dst) renvoie (sysname_src, sysname_dst, chemin)
-pub fn compute_best_paths(graph: &TopoGraph)
-                          -> Vec<(String, String, Vec<String>)>
-{
-    let mut res = Vec::new();
-    for si in graph.node_indices() {
-        for di in graph.node_indices() {
-            if si == di { continue; }
-            if let Some((_, path)) =
-                astar(graph, si, |g| g == di, |_| 1.0, |_| 0.0)
-            {
-                let hops = path.into_iter()
-                    .map(|ni| graph[ni].clone())
-                    .collect();
-                res.push((graph[si].clone(), graph[di].clone(), hops));
+pub fn compute_routes(
+    graph: &HashMap<String, Vec<String>>,
+    source: &str,
+) -> HashMap<String, Vec<String>> {
+    let mut routes = HashMap::new();
+    let mut queue = VecDeque::new();
+    let mut visited = HashMap::new();
+
+    queue.push_back((source.to_string(), vec![source.to_string()]));
+
+    while let Some((node, path)) = queue.pop_front() {
+        for neighbor in graph.get(&node).unwrap_or(&vec![]) {
+            if !visited.contains_key(neighbor) {
+                let mut new_path = path.clone();
+                new_path.push(neighbor.clone());
+                visited.insert(neighbor.clone(), new_path.clone());
+                queue.push_back((neighbor.clone(), new_path));
             }
         }
     }
-    res
+
+    routes.extend(visited);
+    routes
 }
