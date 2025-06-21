@@ -60,71 +60,81 @@ pub async fn start_discovery(
         anyhow::bail!("Aucune interface IPv4 trouvée dans {:?}", iface_names);
     }
 
-    // 2) Socket de réception par interface
+    // 2) UNE SEULE socket de réception pour toutes les interfaces
+    println!("Configuration socket réception sur 0.0.0.0:{}", port);
+    let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    std_sock.set_reuse_address(true)?;
+    #[cfg(unix)] std_sock.set_reuse_port(true)?;
+    std_sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())?;
+
+    // Join le multicast sur toutes nos interfaces
     for (_name, local_ip) in &ifs {
-        println!("Configuration socket réception sur {}:{}", local_ip, port);
-
-        let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-        std_sock.set_reuse_address(true)?;
-        #[cfg(unix)] std_sock.set_reuse_port(true)?;
-        std_sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())?;
+        println!("Join multicast sur interface {}", local_ip);
         std_sock.join_multicast_v4(&MCAST_ADDR.parse()?, local_ip)?;
-        let sock = UdpSocket::from_std(std_sock.into())?;
+    }
 
-        let direct_cl = direct.clone();
-        let lsa_cl    = lsa.clone();
-        let iface_ip = *local_ip;
+    let recv_sock = UdpSocket::from_std(std_sock.into())?;
 
-        tokio::spawn(async move {
-            println!("Task de réception démarrée pour {}", iface_ip);
-            let mut buf = [0u8; 2048];
-            loop {
-                match sock.recv_from(&mut buf).await {
-                    Ok((len, src)) => {
-                        println!("Paquet reçu de {} ({} bytes)", src, len);
-                        if let Ok(msg) = serde_json::from_slice::<LsaMsg>(&buf[..len]) {
-                            println!("Message décodé: {:?}", msg);
-                            match msg.typ.as_str() {
-                                "HELLO" => {
-                                    println!("HELLO reçu de {}", msg.sysname);
-                                    direct_cl.write().await.insert(
+    // Task de réception unique
+    let direct_cl = direct.clone();
+    let lsa_cl = lsa.clone();
+    let sysname_for_recv = sysname.clone();
+
+    tokio::spawn(async move {
+        println!("Task de réception démarrée");
+        let mut buf = [0u8; 2048];
+        loop {
+            match recv_sock.recv_from(&mut buf).await {
+                Ok((len, src)) => {
+                    if let Ok(msg) = serde_json::from_slice::<LsaMsg>(&buf[..len]) {
+                        // Ne pas traiter nos propres messages
+                        if msg.sysname == sysname_for_recv {
+                            println!("Ignorer notre propre message de {}", msg.sysname);
+                            continue;
+                        }
+
+                        println!("Message reçu de {} ({}): {:?}", src, msg.sysname, msg.typ);
+                        match msg.typ.as_str() {
+                            "HELLO" => {
+                                println!("HELLO reçu de {} ({})", msg.sysname, src.ip());
+                                direct_cl.write().await.insert(
+                                    msg.sysname.clone(),
+                                    src.ip().to_string(),
+                                );
+                            }
+                            "LSA" => {
+                                println!("LSA reçu de {}", msg.sysname);
+                                if let Some(neis) = msg.neighbors {
+                                    lsa_cl.write().await.insert(
                                         msg.sysname.clone(),
-                                        src.ip().to_string(),
+                                        neis,
                                     );
                                 }
-                                "LSA" => {
-                                    println!("LSA reçu de {}", msg.sysname);
-                                    if let Some(neis) = msg.neighbors {
-                                        lsa_cl.write().await.insert(
-                                            msg.sysname.clone(),
-                                            neis,
-                                        );
-                                    }
-                                }
-                                _ => {}
                             }
-                        } else {
-                            println!("Erreur décodage message");
+                            _ => {}
                         }
-                    }
-                    Err(e) => {
-                        println!("Erreur réception: {}", e);
+                    } else {
+                        println!("Erreur décodage message de {}", src);
                     }
                 }
+                Err(e) => {
+                    println!("Erreur réception: {}", e);
+                }
             }
-        });
-    }
+        }
+    });
 
     // 3) Socket d'émission par interface
     let mut send_socks = Vec::with_capacity(ifs.len());
-    for (_name, local_ip) in &ifs {
-        println!("Configuration socket émission sur {}", local_ip);
+    for (iface_name, local_ip) in &ifs {
+        println!("Configuration socket émission sur {} ({})", iface_name, local_ip);
 
         let std_sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
         std_sock.set_reuse_address(true)?;
         #[cfg(unix)] std_sock.set_reuse_port(true)?;
         std_sock.bind(&SocketAddrV4::new(*local_ip, 0).into())?;
         std_sock.set_multicast_if_v4(local_ip)?;
+        std_sock.set_multicast_ttl_v4(2)?; // TTL pour multicast
         let sock = UdpSocket::from_std(std_sock.into())?;
         send_socks.push(sock);
     }
@@ -146,16 +156,19 @@ pub async fn start_discovery(
                 neighbors: None,
             };
             let data = serde_json::to_vec(&hello).unwrap();
-            println!("Envoi HELLO de {}", sys);
-            for sock in &send_socks {
+            println!("=> Envoi HELLO de {}", sys);
+
+            for (i, sock) in send_socks.iter().enumerate() {
                 match sock.send_to(&data, mcast_addr).await {
-                    Ok(n) => println!("HELLO envoyé ({} bytes)", n),
-                    Err(e) => println!("Erreur envoi HELLO: {}", e),
+                    Ok(n) => println!("   HELLO envoyé sur interface {} ({} bytes)", i, n),
+                    Err(e) => println!("   Erreur envoi HELLO sur interface {}: {}", i, e),
                 }
             }
 
-            // 2s plus tard, LSA
+            // Attendre un peu avant LSA
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+            // LSA
             let neis = direct_for_emit.read().await.keys().cloned().collect::<Vec<_>>();
             let lsa_msg = LsaMsg {
                 typ:       "LSA".into(),
@@ -163,15 +176,17 @@ pub async fn start_discovery(
                 neighbors: Some(neis.clone()),
             };
             let data2 = serde_json::to_vec(&lsa_msg).unwrap();
-            println!("Envoi LSA de {} avec voisins: {:?}", sys, neis);
-            for sock in &send_socks {
+            println!("=> Envoi LSA de {} avec voisins: {:?}", sys, neis);
+
+            for (i, sock) in send_socks.iter().enumerate() {
                 match sock.send_to(&data2, mcast_addr).await {
-                    Ok(n) => println!("LSA envoyé ({} bytes)", n),
-                    Err(e) => println!("Erreur envoi LSA: {}", e),
+                    Ok(n) => println!("   LSA envoyé sur interface {} ({} bytes)", i, n),
+                    Err(e) => println!("   Erreur envoi LSA sur interface {}: {}", i, e),
                 }
             }
 
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            // Cycle de 10 secondes
+            tokio::time::sleep(std::time::Duration::from_secs(8)).await;
         }
     });
 
