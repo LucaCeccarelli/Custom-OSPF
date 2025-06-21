@@ -1,154 +1,87 @@
-use clap::{Args, Parser, Subcommand};
-use std::net::IpAddr;
-use tracing::{info, error};
-
-mod router;
-mod protocol;
 mod network;
-mod routing_table;
-mod neighbor;
-mod message;
-mod config;
+mod routing;
+mod neighbors;
+mod netlink;
 
-use router::Router;
-use config::RouterConfig;
+use clap::Parser;
+use tokio::runtime::Builder;
+use anyhow::Result;
+use std::time::Duration;
+use std::net::Ipv4Addr;
+
+use neighbors::start_discovery;
+use network::build_graph;
+use routing::compute_best_paths;
 
 #[derive(Parser)]
-#[command(name = "router")]
-#[command(about = "Simple Dynamic Routing Protocol")]
+#[command(name = "custom_ospf",
+    about = "Démon OSPF‐like : découverte de voisins, calcul de routes IPv4 et injection via Netlink")]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
+    /// IPs des interfaces à utiliser pour HELLO/LSA (au moins une)
+    #[arg(long, required = true, num_args = 1..)]
+    interfaces: Vec<String>,
 
-#[derive(Subcommand)]
-enum Commands {
-    /// Start the routing daemon
-    Start(StartArgs),
-    /// Control running router
-    Control(ControlArgs),
-}
+    /// Port UDP pour HELLO/LSA
+    #[arg(long, default_value_t = 5000)]
+    hello_port: u16,
 
-#[derive(Args)]
-struct StartArgs {
-    /// Router ID
-    #[arg(short, long)]
-    id: String,
-
-    /// Router name
-    #[arg(short, long)]
-    name: String,
-
-    /// Configuration file path
-    #[arg(short, long, default_value = "router.json")]
-    config: String,
-
-    /// Control port
-    #[arg(long, default_value = "8080")]
-    control_port: u16,
-
-    /// Protocol port
-    #[arg(long, default_value = "9090")]
-    protocol_port: u16,
-
-    /// Set as default router
+    /// Identifiant unique de ce routeur (sysname)
     #[arg(long)]
-    default_router: bool,
+    sysname: String,
 }
 
-#[derive(Args)]
-struct ControlArgs {
-    /// Target router control address
-    #[arg(short, long, default_value = "127.0.0.1:8080")]
-    target: String,
-
-    #[command(subcommand)]
-    action: ControlAction,
-}
-
-#[derive(Subcommand)]
-enum ControlAction {
-    /// Enable the routing protocol
-    Enable,
-    /// Disable the routing protocol
-    Disable,
-    /// Show neighbor list
-    Neighbors,
-    /// Show routing table
-    Routes,
-    /// Show network topology
-    Topology,
-    /// Force route recalculation
-    Recalculate,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
-
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::Start(args) => {
-            info!("Starting router {} ({})", args.name, args.id);
+    // Runtime Tokio (current_thread suffit ici)
+    let rt = Builder::new_current_thread().enable_all().build()?;
+    rt.block_on(async {
+        // 1) Démarrage du mécanisme de découverte (HELLO + LSAs)
+        let discovery = start_discovery(
+            cli.sysname.clone(),
+            cli.interfaces.clone(),
+            cli.hello_port,
+        ).await?;
 
-            // Load configuration
-            let config = match RouterConfig::load(&args.config) {
-                Ok(config) => {
-                    info!("Successfully loaded configuration from {}", args.config);
-                    config
-                }
-                Err(e) => {
-                    error!("Failed to load configuration from {}: {}", args.config, e);
-                    info!("Using default configuration instead");
-                    RouterConfig::default()
-                }
+        loop {
+            // 2) Reconstruit le graphe global à partir des LSAs reçus
+            let graph = build_graph(&discovery.lsa).await;
+
+            // 3) Calcul des meilleurs chemins (par nombre de sauts / tie‐break capacité)
+            let routes = compute_best_paths(&graph);
+
+            // 4) Récupère en une fois la table sysname → IP
+            let direct_map = {
+                let dm = discovery.direct.read().await;
+                dm.clone()  // HashMap<String,String>
             };
-            // Create and start router
-            let mut router = Router::new(
-                args.id,
-                args.name,
-                config,
-                args.control_port,
-                args.protocol_port,
-                args.default_router,
-            ).await?;
 
-            router.start().await?;
+            // 5) Pour chaque (src, dst, path), on installe
+            //    une route host (/32) vers dst via le premier saut
+            for (_src_sys, dst_sys, path) in routes {
+                if path.len() >= 2 {
+                    let next_hop_sys = &path[1];
+                    // on ne peut installer la route que si
+                    // dst_sys et next_hop_sys sont dans direct_map
+                    if let (Some(dst_ip_str), Some(gw_str)) = (
+                        direct_map.get(&dst_sys),
+                        direct_map.get(next_hop_sys),
+                    ) {
+                        // parse des adresses IPv4
+                        if let (Ok(dst_ip), Ok(gw_ip)) = (
+                            dst_ip_str.parse::<Ipv4Addr>(),
+                            gw_str.parse::<Ipv4Addr>(),
+                        ) {
+                            // préfixe host
+                            let prefix = 32;
+                            netlink::add_ipv4_route(dst_ip, prefix, gw_ip);
+                        }
+                    }
+                }
+            }
+
+            // 6) Attente avant le prochain recalcul
+            tokio::time::sleep(Duration::from_secs(30)).await;
         }
-        Commands::Control(args) => {
-            // Send control commands to running router
-            send_control_command(&args.target, args.action).await?;
-        }
-    }
-
-    Ok(())
-}
-
-async fn send_control_command(target: &str, action: ControlAction) -> anyhow::Result<()> {
-    use tokio::net::TcpStream;
-    use tokio::io::{AsyncWriteExt, AsyncReadExt};
-
-    let mut stream = TcpStream::connect(target).await?;
-
-    let command = match action {
-        ControlAction::Enable => "ENABLE",
-        ControlAction::Disable => "DISABLE",
-        ControlAction::Neighbors => "NEIGHBORS",
-        ControlAction::Routes => "ROUTES",
-        ControlAction::Topology => "TOPOLOGY",
-        ControlAction::Recalculate => "RECALCULATE",
-    };
-
-    stream.write_all(command.as_bytes()).await?;
-    stream.write_all(b"\n").await?;
-
-    let mut buffer = vec![0; 4096];
-    let n = stream.read(&mut buffer).await?;
-    let response = String::from_utf8_lossy(&buffer[..n]);
-
-    println!("{}", response);
-
-    Ok(())
+    })
 }
