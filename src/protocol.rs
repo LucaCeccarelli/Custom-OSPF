@@ -33,11 +33,12 @@ pub struct HelloMessage {
 
 pub struct SimpleRoutingProtocol {
     router: Arc<Mutex<Router>>,
-    socket: UdpSocket,
+    sockets: Vec<UdpSocket>,  // Un socket par interface
     neighbors: Arc<Mutex<HashMap<String, (SocketAddr, RouterInfo)>>>,
     sequence: Arc<Mutex<u64>>,
-    multicast_addr: SocketAddr,
+    port: u16,
     debug_mode: bool,
+    our_ips: HashSet<Ipv4Addr>,  // Nos propres IPs pour filtrer les loopbacks
 }
 
 impl SimpleRoutingProtocol {
@@ -48,25 +49,56 @@ impl SimpleRoutingProtocol {
         network: Network,
         debug_mode: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let socket = UdpSocket::bind(format!("0.0.0.0:{}", port)).await?;
-        socket.set_broadcast(true)?;
-
         let router = Router::new(
             router_id,
             network,
             interface_names.into_iter().collect(),
         )?;
 
+        // Créer un socket pour chaque interface
+        let mut sockets = Vec::new();
+        let mut our_ips = HashSet::new();
+
+        for (_, interface) in &router.interfaces {
+            // Bind sur l'IP spécifique de chaque interface
+            let bind_addr = format!("{}:{}", interface.ip, port);
+
+            match UdpSocket::bind(&bind_addr).await {
+                Ok(socket) => {
+                    socket.set_broadcast(true)?;
+                    info!("✓ Socket bound to {} on interface {}", bind_addr, interface.name);
+                    sockets.push(socket);
+                    our_ips.insert(interface.ip);
+                }
+                Err(e) => {
+                    warn!("✗ Failed to bind to {}: {}", bind_addr, e);
+                    // Fallback: essayer de bind sur 0.0.0.0 pour cette interface
+                    let fallback_addr = format!("0.0.0.0:{}", port);
+                    let socket = UdpSocket::bind(&fallback_addr).await?;
+                    socket.set_broadcast(true)?;
+                    info!("✓ Fallback socket bound to {} for interface {}", fallback_addr, interface.name);
+                    sockets.push(socket);
+                    our_ips.insert(interface.ip);
+                }
+            }
+        }
+
+        if sockets.is_empty() {
+            return Err("No sockets could be created".into());
+        }
+
         info!("Router created successfully");
-        info!("Listening on port {}", port);
+        info!("Bound to {} sockets on port {}", sockets.len(), port);
+        info!("Our IPs: {:?}", our_ips);
 
         Ok(Self {
             router: Arc::new(Mutex::new(router)),
-            socket,
+            sockets,
             neighbors: Arc::new(Mutex::new(HashMap::new())),
             sequence: Arc::new(Mutex::new(0)),
-            multicast_addr: format!("255.255.255.255:{}", port).parse()?,
+            port,
             debug_mode,
+            our_ips,
         })
     }
 
@@ -106,18 +138,17 @@ impl SimpleRoutingProtocol {
         }
         info!("Initial routing table:");
         for route in router_guard.routing_table.get_routes() {
-            // FIX: Créer une variable temporaire pour éviter l'erreur de lifetime
             let next_hop_str = if route.next_hop.is_unspecified() {
                 "direct".to_string()
             } else {
                 route.next_hop.to_string()
             };
 
-            info!("  {} via {} dev {} metric {} ({:?})", 
-                  route.destination, 
+            info!("  {} via {} dev {} metric {} ({:?})",
+                  route.destination,
                   next_hop_str,
-                  route.interface, 
-                  route.metric, 
+                  route.interface,
+                  route.metric,
                   route.source);
         }
         info!("=============================");
@@ -150,18 +181,17 @@ impl SimpleRoutingProtocol {
                 info!("  (no routes)");
             } else {
                 for route in routes {
-                    // FIX: Même correction ici
                     let next_hop_str = if route.next_hop.is_unspecified() {
                         "direct".to_string()
                     } else {
                         route.next_hop.to_string()
                     };
 
-                    info!("  {} via {} dev {} metric {} ({:?})", 
-                          route.destination, 
+                    info!("  {} via {} dev {} metric {} ({:?})",
+                          route.destination,
                           next_hop_str,
-                          route.interface, 
-                          route.metric, 
+                          route.interface,
+                          route.metric,
                           route.source);
                 }
             }
@@ -172,9 +202,7 @@ impl SimpleRoutingProtocol {
     }
 
     async fn start_hello_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let socket = &self.socket;
         let router = self.router.clone();
-        let multicast_addr = self.multicast_addr;
 
         let mut interval = interval(Duration::from_secs(10));
 
@@ -198,19 +226,30 @@ impl SimpleRoutingProtocol {
 
             debug!("Sending HELLO: {}", message);
 
-            if let Err(e) = socket.send_to(hello_packet.as_bytes(), multicast_addr).await {
-                warn!("Failed to send hello: {}", e);
-            } else {
-                info!("✓ Sent HELLO from {}", router_info.router_id);
+            // Envoyer depuis chaque socket vers le broadcast de son réseau
+            for (i, socket) in self.sockets.iter().enumerate() {
+                let router_guard = router.lock().await;
+                if let Some((_, interface)) = router_guard.interfaces.iter().nth(i) {
+                    // Calculer l'adresse de broadcast pour ce réseau
+                    let broadcast_addr = interface.network.broadcast();
+                    let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
+
+                    if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
+                        if let Err(e) = socket.send_to(hello_packet.as_bytes(), target_addr).await {
+                            warn!("Failed to send hello from {} to {}: {}", interface.ip, target_addr, e);
+                        } else {
+                            info!("✓ Sent HELLO from {} to {}", interface.ip, target_addr);
+                        }
+                    }
+                }
+                drop(router_guard);
             }
         }
     }
 
     async fn start_update_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let socket = &self.socket;
         let router = self.router.clone();
         let sequence = self.sequence.clone();
-        let multicast_addr = self.multicast_addr;
 
         let mut interval = interval(Duration::from_secs(20));
 
@@ -247,43 +286,79 @@ impl SimpleRoutingProtocol {
 
             debug!("Sending UPDATE: {}", message);
 
-            if let Err(e) = socket.send_to(update_packet.as_bytes(), multicast_addr).await {
-                warn!("Failed to send routing update: {}", e);
-            } else {
-                info!("✓ Sent UPDATE from {} with {} routes (seq: {})", 
-                      router_id, update.routes.len(), current_seq);
+            // Envoyer depuis chaque socket vers le broadcast de son réseau
+            for (i, socket) in self.sockets.iter().enumerate() {
+                let router_guard = router.lock().await;
+                if let Some((_, interface)) = router_guard.interfaces.iter().nth(i) {
+                    let broadcast_addr = interface.network.broadcast();
+                    let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
+
+                    if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
+                        if let Err(e) = socket.send_to(update_packet.as_bytes(), target_addr).await {
+                            warn!("Failed to send update from {} to {}: {}", interface.ip, target_addr, e);
+                        } else {
+                            info!("✓ Sent UPDATE from {} to {} with {} routes (seq: {})",
+                                  interface.ip, target_addr, update.routes.len(), current_seq);
+                        }
+                    }
+                }
+                drop(router_guard);
             }
         }
     }
 
     async fn start_listen_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let socket = &self.socket;
         let router = self.router.clone();
         let neighbors = self.neighbors.clone();
 
-        let mut buffer = [0u8; 4096];
+        info!("Started listening for messages on {} sockets...", self.sockets.len());
 
-        info!("Started listening for messages...");
+        // Créer une tâche d'écoute pour chaque socket
+        let mut tasks = Vec::new();
 
-        loop {
-            match socket.recv_from(&mut buffer).await {
-                Ok((len, addr)) => {
-                    let data = String::from_utf8_lossy(&buffer[..len]);
-                    debug!("Received {} bytes from {}: {}", len, addr, data);
+        for (i, socket) in self.sockets.iter().enumerate() {
+            let socket_ref = socket;
+            let router_clone = router.clone();
+            let neighbors_clone = neighbors.clone();
+            let our_ips_clone = self.our_ips.clone();
 
-                    if let Err(e) = self.handle_message(&data, addr, &router, &neighbors).await {
-                        warn!("Failed to handle message from {}: {}", addr, e);
+            let task = tokio::spawn(async move {
+                let mut buffer = [0u8; 4096];
+
+                loop {
+                    match socket_ref.recv_from(&mut buffer).await {
+                        Ok((len, addr)) => {
+                            // Filtrer les messages de nos propres IPs (anti-loopback)
+                            if our_ips_clone.contains(&addr.ip()) {
+                                debug!("Ignoring loopback message from our own IP: {}", addr.ip());
+                                continue;
+                            }
+
+                            let data = String::from_utf8_lossy(&buffer[..len]);
+                            debug!("Socket {} received {} bytes from {}: {}", i, len, addr, data);
+
+                            if let Err(e) = Self::handle_message_static(&data, addr, &router_clone, &neighbors_clone).await {
+                                warn!("Failed to handle message from {}: {}", addr, e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Socket {} failed to receive message: {}", i, e);
+                        }
                     }
                 }
-                Err(e) => {
-                    error!("Failed to receive message: {}", e);
-                }
-            }
+            });
+
+            tasks.push(task);
         }
+
+        // Attendre toutes les tâches d'écoute
+        futures::future::join_all(tasks).await;
+
+        Ok(())
     }
 
-    async fn handle_message(
-        &self,
+    // Version statique de handle_message pour être utilisée dans les tâches async
+    async fn handle_message_static(
         data: &str,
         addr: SocketAddr,
         router: &Arc<Mutex<Router>>,
@@ -296,6 +371,7 @@ impl SimpleRoutingProtocol {
             let router_guard = router.lock().await;
             if hello.router_id == router_guard.id {
                 drop(router_guard);
+                debug!("Ignoring our own HELLO message");
                 return Ok(());
             }
             drop(router_guard);
@@ -329,22 +405,23 @@ impl SimpleRoutingProtocol {
             let router_guard = router.lock().await;
             if update.router_id == router_guard.id {
                 drop(router_guard);
+                debug!("Ignoring our own UPDATE message");
                 return Ok(());
             }
             drop(router_guard);
 
-            info!("← Received UPDATE from {} with {} routes (seq: {})", 
+            info!("← Received UPDATE from {} with {} routes (seq: {})",
                   update.router_id, update.routes.len(), update.sequence);
             debug!("UPDATE content: {:?}", update);
 
-            self.process_routing_update(update, router).await?;
+            Self::process_routing_update_static(update, router).await?;
         }
 
         Ok(())
     }
 
-    async fn process_routing_update(
-        &self,
+    // Version statique de process_routing_update
+    async fn process_routing_update_static(
         update: RoutingUpdate,
         router: &Arc<Mutex<Router>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -393,5 +470,23 @@ impl SimpleRoutingProtocol {
         }
 
         Ok(())
+    }
+
+    async fn handle_message(
+        &self,
+        data: &str,
+        addr: SocketAddr,
+        router: &Arc<Mutex<Router>>,
+        neighbors: &Arc<Mutex<HashMap<String, (SocketAddr, RouterInfo)>>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Self::handle_message_static(data, addr, router, neighbors).await
+    }
+
+    async fn process_routing_update(
+        &self,
+        update: RoutingUpdate,
+        router: &Arc<Mutex<Router>>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Self::process_routing_update_static(update, router).await
     }
 }

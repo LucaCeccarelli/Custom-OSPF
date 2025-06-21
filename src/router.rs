@@ -1,6 +1,6 @@
 use crate::network::{InterfaceInfo, Network};
 use crate::routing_table::{RouteEntry, RouteSource, RoutingTable};
-use log::{info, warn};
+use log::info;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
