@@ -418,7 +418,7 @@ impl SimpleRoutingProtocol {
                   update.router_id, update.routes.len(), update.sequence);
             debug!("UPDATE content: {:?}", update);
 
-            Self::process_routing_update_static(update, router).await?;
+            Self::process_routing_update_static(update, router).await.expect("Failed to process routing update");
         }
 
         Ok(())
@@ -428,98 +428,74 @@ impl SimpleRoutingProtocol {
     async fn process_routing_update_static(
         update: RoutingUpdate,
         router: &Arc<Mutex<Router>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+        // Helper function with Send + Sync error
+        fn host_to_network_route(host_with_prefix: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+            let network: ipnetwork::Ipv4Network = host_with_prefix.parse()
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+            let network_addr = network.network();
+            let prefix_len = network.prefix();
+            Ok(format!("{}/{}", network_addr, prefix_len))
+        }
+
         let mut new_routes = Vec::new();
         let mut processed_routes = 0;
 
         for route_info in update.routes {
-            // Parse destination as a network
-            let destination_network = match route_info.destination.parse::<ipnetwork::Ipv4Network>() {
-                Ok(net) => net,
+            // Convert host route to network route
+            let corrected_destination = match host_to_network_route(&route_info.destination) {
+                Ok(dest) => dest,
                 Err(e) => {
-                    warn!("Failed to parse destination network {}: {}", route_info.destination, e);
+                    warn!("Failed to correct route destination {}: {}", route_info.destination, e);
                     continue;
                 }
             };
 
-            // Parse next hop as an IP address
-            let next_hop = match route_info.next_hop.parse::<Ipv4Addr>() {
-                Ok(ip) => ip,
-                Err(e) => {
-                    warn!("Failed to parse next hop IP {}: {}", route_info.next_hop, e);
-                    continue;
-                }
-            };
+            // Now parse the corrected destination
+            if let Ok(destination) = corrected_destination.parse::<ipnetwork::Ipv4Network>() {
+                if let Ok(next_hop) = route_info.next_hop.parse::<Ipv4Addr>() {
+                    let router_guard = router.lock().await;
 
-            let router_guard = router.lock().await;
+                    // Check if it's our own network
+                    let mut is_our_network = false;
+                    for (_, interface) in &router_guard.interfaces {
+                        if interface.network == destination {
+                            is_our_network = true;
+                            break;
+                        }
+                    }
 
-            // Skip our own networks
-            let mut is_our_network = false;
-            for (_, interface) in &router_guard.interfaces {
-                if interface.network == destination_network {
-                    is_our_network = true;
-                    debug!("Skipping our own network: {}", destination_network);
-                    break;
+                    if !is_our_network {
+                        if let Some((_, interface)) = router_guard.interfaces.iter().next() {
+                            let route = RouteEntry {
+                                destination,
+                                next_hop,
+                                interface: interface.name.clone(),
+                                metric: route_info.metric + 1,
+                                source: RouteSource::Protocol,
+                            };
+
+                            debug!("Adding route: {} via {} dev {} metric {}", 
+                               route.destination,
+                               if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
+                               route.interface,
+                               route.metric);
+
+                            new_routes.push(route);
+                            processed_routes += 1;
+                        }
+                    }
+                    drop(router_guard);
                 }
             }
-
-            if !is_our_network {
-                // Find the best interface to reach the next hop
-                let interface_name = if next_hop.is_unspecified() {
-                    // If next_hop is 0.0.0.0, this is a direct route from the neighbor
-                    // Choose interface based on which network can reach the destination
-                    router_guard.interfaces.iter()
-                        .find(|(_, iface)| {
-                            // Check if any of our interfaces can reach the destination network
-                            iface.network.contains(destination_network.ip()) ||
-                                iface.network.network() == destination_network.network()
-                        })
-                        .map(|(name, _)| name.clone())
-                        .unwrap_or_else(|| {
-                            // Default to first interface if no specific match
-                            router_guard.interfaces.keys().next().unwrap().clone()
-                        })
-                } else {
-                    // Find interface that can reach the next_hop
-                    router_guard.interfaces.iter()
-                        .find(|(_, iface)| iface.network.contains(next_hop))
-                        .map(|(name, _)| name.clone())
-                        .unwrap_or_else(|| {
-                            // Default to first interface if next_hop not directly reachable
-                            router_guard.interfaces.keys().next().unwrap().clone()
-                        })
-                };
-
-                let route = RouteEntry {
-                    destination: destination_network,
-                    next_hop,
-                    interface: interface_name,
-                    metric: route_info.metric + 1, // Increment metric for distance vector
-                    source: RouteSource::Protocol,
-                };
-
-                debug!("Adding route: {} via {} dev {} metric {}",
-                   route.destination,
-                   if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
-                   route.interface,
-                   route.metric);
-
-                new_routes.push(route);
-                processed_routes += 1;
-            }
-            drop(router_guard);
         }
 
+        // Rest of your existing code...
         if processed_routes > 0 {
             let mut router_guard = router.lock().await;
-            match router_guard.update_routing_table(new_routes) {
-                Ok(_) => {
-                    info!("✓ Updated routing table with {} new routes", processed_routes);
-                }
-                Err(e) => {
-                    error!("Failed to update routing table: {}", e);
-                }
-            }
+            router_guard.update_routing_table(new_routes).expect("Router guard failed to update routing table");
+            info!("✓ Updated routing table with {} new routes", processed_routes);
             drop(router_guard);
         }
 
@@ -540,7 +516,7 @@ impl SimpleRoutingProtocol {
         &self,
         update: RoutingUpdate,
         router: &Arc<Mutex<Router>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
         Self::process_routing_update_static(update, router).await
     }
 }
