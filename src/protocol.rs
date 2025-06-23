@@ -461,7 +461,7 @@ impl SimpleRoutingProtocol {
 
             // Now parse the corrected destination
             if let Ok(destination) = corrected_destination.parse::<ipnetwork::Ipv4Network>() {
-                if let Ok(next_hop) = route_info.next_hop.parse::<Ipv4Addr>() {
+                if let Ok(advertised_next_hop) = route_info.next_hop.parse::<Ipv4Addr>() {
                     let router_guard = router.lock().await;
 
                     // Check if it's our own network
@@ -475,20 +475,45 @@ impl SimpleRoutingProtocol {
 
                     if !is_our_network {
                         if let Some((_, interface)) = router_guard.interfaces.iter().next() {
+                            // Determine the correct next hop
+                            let actual_next_hop = if advertised_next_hop.is_unspecified() {
+                                // If the advertised next hop is 0.0.0.0 (direct route from sender),
+                                // then the sender is the next hop for us
+                                sender_ip
+                            } else {
+                                // If there's a specific next hop, we need to check if it's reachable
+                                // If the advertised next hop is in one of our local networks, use it directly
+                                let mut use_advertised = false;
+                                for (_, local_interface) in &router_guard.interfaces {
+                                    if local_interface.network.contains(advertised_next_hop) {
+                                        use_advertised = true;
+                                        break;
+                                    }
+                                }
+
+                                if use_advertised {
+                                    advertised_next_hop
+                                } else {
+                                    // The advertised next hop is not directly reachable,
+                                    // so we use the sender as our next hop
+                                    sender_ip
+                                }
+                            };
+
                             let route = RouteEntry {
                                 destination,
-                                next_hop: sender_ip,
+                                next_hop: actual_next_hop,
                                 interface: interface.name.clone(),
                                 metric: route_info.metric + 1,
                                 source: RouteSource::Protocol,
                             };
-                            println!("🔍 DEBUG: Created route with source = {:?}", route.source);
 
-                            debug!("Adding route: {} via {} dev {} metric {}",
+                            debug!("Adding route: {} via {} dev {} metric {} (advertised next hop: {})",
                                route.destination,
                                if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
                                route.interface,
-                               route.metric);
+                               route.metric,
+                               if advertised_next_hop.is_unspecified() { "direct".to_string() } else { advertised_next_hop.to_string() });
 
                             new_routes.push(route);
                             processed_routes += 1;
