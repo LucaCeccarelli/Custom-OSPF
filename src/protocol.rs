@@ -225,11 +225,10 @@ impl SimpleRoutingProtocol {
 
             debug!("Sending HELLO: {}", message);
 
-            // Envoyer depuis chaque socket vers le broadcast de son réseau
-            for (i, socket) in self.sockets.iter().enumerate() {
+            // Send from the first socket to all network broadcasts
+            if let Some(socket) = self.sockets.first() {
                 let router_guard = router.lock().await;
-                if let Some((_, interface)) = router_guard.interfaces.iter().nth(i) {
-                    // Calculer l'adresse de broadcast pour ce réseau
+                for (_, interface) in &router_guard.interfaces {
                     let broadcast_addr = interface.network.broadcast();
                     let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
 
@@ -265,10 +264,14 @@ impl SimpleRoutingProtocol {
                 .routing_table
                 .get_routes()
                 .iter()
-                .map(|route| RouteInfo {
-                    destination: route.destination.to_string(),
-                    metric: route.metric,
-                    next_hop: route.next_hop.to_string(),
+                .map(|route| {
+                    let destination_str = route.destination.to_string();
+
+                    RouteInfo {
+                        destination: destination_str,
+                        metric: route.metric,
+                        next_hop: route.next_hop.to_string(),
+                    }
                 })
                 .collect();
             let router_id = router_guard.id.clone();
@@ -285,10 +288,10 @@ impl SimpleRoutingProtocol {
 
             debug!("Sending UPDATE: {}", message);
 
-            // Envoyer depuis chaque socket vers le broadcast de son réseau
-            for (i, socket) in self.sockets.iter().enumerate() {
+            // Send from the first socket to all network broadcasts
+            if let Some(socket) = self.sockets.first() {
                 let router_guard = router.lock().await;
-                if let Some((_, interface)) = router_guard.interfaces.iter().nth(i) {
+                for (_, interface) in &router_guard.interfaces {
                     let broadcast_addr = interface.network.broadcast();
                     let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
 
@@ -297,7 +300,7 @@ impl SimpleRoutingProtocol {
                             warn!("Failed to send update from {} to {}: {}", interface.ip, target_addr, e);
                         } else {
                             info!("✓ Sent UPDATE from {} to {} with {} routes (seq: {})",
-                                  interface.ip, target_addr, update.routes.len(), current_seq);
+                              interface.ip, target_addr, update.routes.len(), current_seq);
                         }
                     }
                 }
@@ -430,43 +433,93 @@ impl SimpleRoutingProtocol {
         let mut processed_routes = 0;
 
         for route_info in update.routes {
-            if let (Ok(destination), Ok(next_hop)) = (
-                route_info.destination.parse(),
-                route_info.next_hop.parse::<Ipv4Addr>(),
-            ) {
-                let router_guard = router.lock().await;
-
-                // Éviter les routes vers nos propres réseaux
-                let mut is_our_network = false;
-                for (_, interface) in &router_guard.interfaces {
-                    if interface.network == destination {
-                        is_our_network = true;
-                        break;
-                    }
+            // Parse destination as a network
+            let destination_network = match route_info.destination.parse::<ipnetwork::Ipv4Network>() {
+                Ok(net) => net,
+                Err(e) => {
+                    warn!("Failed to parse destination network {}: {}", route_info.destination, e);
+                    continue;
                 }
+            };
 
-                if !is_our_network {
-                    // Choisir la première interface disponible
-                    if let Some((_, interface)) = router_guard.interfaces.iter().next() {
-                        let route = RouteEntry {
-                            destination,
-                            next_hop,
-                            interface: interface.name.clone(),
-                            metric: route_info.metric + 1,
-                            source: RouteSource::Protocol,
-                        };
-                        new_routes.push(route);
-                        processed_routes += 1;
-                    }
+            // Parse next hop as an IP address
+            let next_hop = match route_info.next_hop.parse::<Ipv4Addr>() {
+                Ok(ip) => ip,
+                Err(e) => {
+                    warn!("Failed to parse next hop IP {}: {}", route_info.next_hop, e);
+                    continue;
                 }
-                drop(router_guard);
+            };
+
+            let router_guard = router.lock().await;
+
+            // Skip our own networks
+            let mut is_our_network = false;
+            for (_, interface) in &router_guard.interfaces {
+                if interface.network == destination_network {
+                    is_our_network = true;
+                    debug!("Skipping our own network: {}", destination_network);
+                    break;
+                }
             }
+
+            if !is_our_network {
+                // Find the best interface to reach the next hop
+                let interface_name = if next_hop.is_unspecified() {
+                    // If next_hop is 0.0.0.0, this is a direct route from the neighbor
+                    // Choose interface based on which network can reach the destination
+                    router_guard.interfaces.iter()
+                        .find(|(_, iface)| {
+                            // Check if any of our interfaces can reach the destination network
+                            iface.network.contains(destination_network.ip()) ||
+                                iface.network.network() == destination_network.network()
+                        })
+                        .map(|(name, _)| name.clone())
+                        .unwrap_or_else(|| {
+                            // Default to first interface if no specific match
+                            router_guard.interfaces.keys().next().unwrap().clone()
+                        })
+                } else {
+                    // Find interface that can reach the next_hop
+                    router_guard.interfaces.iter()
+                        .find(|(_, iface)| iface.network.contains(next_hop))
+                        .map(|(name, _)| name.clone())
+                        .unwrap_or_else(|| {
+                            // Default to first interface if next_hop not directly reachable
+                            router_guard.interfaces.keys().next().unwrap().clone()
+                        })
+                };
+
+                let route = RouteEntry {
+                    destination: destination_network,
+                    next_hop,
+                    interface: interface_name,
+                    metric: route_info.metric + 1, // Increment metric for distance vector
+                    source: RouteSource::Protocol,
+                };
+
+                debug!("Adding route: {} via {} dev {} metric {}",
+                   route.destination,
+                   if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
+                   route.interface,
+                   route.metric);
+
+                new_routes.push(route);
+                processed_routes += 1;
+            }
+            drop(router_guard);
         }
 
         if processed_routes > 0 {
             let mut router_guard = router.lock().await;
-            router_guard.update_routing_table(new_routes)?;
-            info!("✓ Updated routing table with {} new routes", processed_routes);
+            match router_guard.update_routing_table(new_routes) {
+                Ok(_) => {
+                    info!("✓ Updated routing table with {} new routes", processed_routes);
+                }
+                Err(e) => {
+                    error!("Failed to update routing table: {}", e);
+                }
+            }
             drop(router_guard);
         }
 
