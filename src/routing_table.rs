@@ -61,6 +61,8 @@ impl RoutingTable {
 
             self.routes.push(route.clone());
 
+            println!("🔍 DEBUG: Route source = {:?}, calling add_system_route = {}",
+                     route.source, route.source != RouteSource::Direct);
             // Ajouter au système seulement si ce n'est pas une route directe
             if route.source != RouteSource::Direct {
                 self.add_system_route(&route)?;
@@ -100,6 +102,8 @@ impl RoutingTable {
 
         cmd.args(&["dev", &route.interface]);
         cmd.args(&["metric", &route.metric.to_string()]);
+
+        println!("🔧 DEBUG: Executing command: {:?}", cmd);
 
         let output = cmd.output()?;
 

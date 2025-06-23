@@ -481,6 +481,7 @@ impl SimpleRoutingProtocol {
                                 metric: route_info.metric + 1,
                                 source: RouteSource::Protocol,
                             };
+                            println!("🔍 DEBUG: Created route with source = {:?}", route.source);
 
                             debug!("Adding route: {} via {} dev {} metric {}",
                                route.destination,
