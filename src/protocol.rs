@@ -418,8 +418,7 @@ impl SimpleRoutingProtocol {
                   update.router_id, update.routes.len(), update.sequence);
             debug!("UPDATE content: {:?}", update);
 
-            Self::process_routing_update_static(update, router).await.expect("Failed to process routing update");
-        }
+            Self::process_routing_update_static(update, addr, router).await.expect("Failed to process routing update");        }
 
         Ok(())
     }
@@ -427,8 +426,15 @@ impl SimpleRoutingProtocol {
     // Version statique de process_routing_update
     async fn process_routing_update_static(
         update: RoutingUpdate,
+        sender_addr: SocketAddr, 
         router: &Arc<Mutex<Router>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+        let sender_ip = if let std::net::IpAddr::V4(ipv4) = sender_addr.ip() {
+            ipv4
+        } else {
+            return Err("Only IPv4 addresses supported".into());
+        };
 
         // Helper function with Send + Sync error
         fn host_to_network_route(host_with_prefix: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -470,13 +476,13 @@ impl SimpleRoutingProtocol {
                         if let Some((_, interface)) = router_guard.interfaces.iter().next() {
                             let route = RouteEntry {
                                 destination,
-                                next_hop,
+                                next_hop: sender_ip,
                                 interface: interface.name.clone(),
                                 metric: route_info.metric + 1,
                                 source: RouteSource::Protocol,
                             };
 
-                            debug!("Adding route: {} via {} dev {} metric {}", 
+                            debug!("Adding route: {} via {} dev {} metric {}",
                                route.destination,
                                if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
                                route.interface,
@@ -515,8 +521,9 @@ impl SimpleRoutingProtocol {
     async fn process_routing_update(
         &self,
         update: RoutingUpdate,
+        sender_addr: SocketAddr,
         router: &Arc<Mutex<Router>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
-        Self::process_routing_update_static(update, router).await
+        Self::process_routing_update_static(update, sender_addr, router).await
     }
 }
