@@ -79,35 +79,4 @@ impl Network {
     pub fn get_interfaces(&self) -> &HashMap<String, InterfaceInfo> {
         &self.interfaces
     }
-
-    pub fn add_route(
-        &self,
-        destination: Ipv4Network,
-        next_hop: Ipv4Addr,
-        interface: &str,
-        metric: u32,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        debug!("Adding system route: {} via {} dev {} metric {}", 
-               destination, next_hop, interface, metric);
-
-        let mut cmd = Command::new("ip");
-        cmd.args(&["route", "add", &destination.to_string()]);
-
-        if !next_hop.is_unspecified() {
-            cmd.args(&["via", &next_hop.to_string()]);
-        }
-
-        cmd.args(&["dev", interface, "metric", &metric.to_string()]);
-
-        let output = cmd.output()?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            if !error.contains("File exists") {
-                return Err(format!("Failed to add route: {}", error).into());
-            }
-        }
-
-        Ok(())
-    }
 }

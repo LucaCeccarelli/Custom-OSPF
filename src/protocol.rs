@@ -561,16 +561,6 @@ impl SimpleRoutingProtocol {
         Ok(())
     }
 
-    async fn handle_message(
-        &self,
-        data: &str,
-        addr: SocketAddr,
-        router: &Arc<Mutex<Router>>,
-        neighbors: &Arc<Mutex<HashMap<String, (SocketAddr, RouterInfo)>>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        Self::handle_message_static(data, addr, router, neighbors).await
-    }
-
     async fn process_routing_update(
         &self,
         update: RoutingUpdate,

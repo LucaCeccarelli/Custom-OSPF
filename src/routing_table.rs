@@ -212,7 +212,7 @@ impl RoutingTable {
     }
 
     async fn delete_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        info!("🗑️ Deleting route: {}", route.destination);
+        info!("Deleting route: {}", route.destination);
 
         let net_route = net_route::Route::new(
             IpAddr::V4(route.destination.network()),
@@ -252,11 +252,6 @@ impl RoutingTable {
         }
 
         Ok(())
-    }
-
-    pub fn refresh_local_networks(&mut self) {
-        self.local_networks = Self::discover_local_networks();
-        debug!("Refreshed local networks: {:?}", self.local_networks);
     }
 }
 
