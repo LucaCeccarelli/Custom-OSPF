@@ -449,6 +449,11 @@ impl SimpleRoutingProtocol {
         let mut new_routes = Vec::new();
         let mut processed_routes = 0;
 
+        // Get router info once to avoid multiple locks
+        let router_guard = router.lock().await;
+        let router_interfaces = router_guard.interfaces.clone();
+        drop(router_guard);
+
         for route_info in update.routes {
             // Convert host route to network route
             let corrected_destination = match host_to_network_route(&route_info.destination) {
@@ -462,65 +467,85 @@ impl SimpleRoutingProtocol {
             // Now parse the corrected destination
             if let Ok(destination) = corrected_destination.parse::<ipnetwork::Ipv4Network>() {
                 if let Ok(advertised_next_hop) = route_info.next_hop.parse::<Ipv4Addr>() {
-                    let router_guard = router.lock().await;
 
                     // Check if it's our own network
                     let mut is_our_network = false;
-                    for (_, interface) in &router_guard.interfaces {
+                    for (_, interface) in &router_interfaces {
                         if interface.network == destination {
                             is_our_network = true;
                             break;
                         }
                     }
 
-                    if !is_our_network {
-                        if let Some((_, interface)) = router_guard.interfaces.iter().next() {
-                            // Determine the correct next hop
-                            let actual_next_hop = if advertised_next_hop.is_unspecified() {
-                                // If the advertised next hop is 0.0.0.0 (direct route from sender),
-                                // then the sender is the next hop for us
-                                sender_ip
-                            } else {
-                                // If there's a specific next hop, we need to check if it's reachable
-                                // If the advertised next hop is in one of our local networks, use it directly
-                                let mut use_advertised = false;
-                                for (_, local_interface) in &router_guard.interfaces {
-                                    if local_interface.network.contains(advertised_next_hop) {
-                                        use_advertised = true;
-                                        break;
-                                    }
-                                }
+                    if is_our_network {
+                        debug!("Skipping route to our own network: {}", destination);
+                        continue;
+                    }
 
-                                if use_advertised {
-                                    advertised_next_hop
-                                } else {
-                                    // The advertised next hop is not directly reachable,
-                                    // so we use the sender as our next hop
-                                    sender_ip
-                                }
-                            };
+                    // Find the best interface to route through
+                    let mut best_interface = None;
+                    let mut best_metric = u32::MAX;
 
-                            let route = RouteEntry {
-                                destination,
-                                next_hop: actual_next_hop,
-                                interface: interface.name.clone(),
-                                metric: route_info.metric + 1,
-                                source: RouteSource::Protocol,
-                            };
-
-                            debug!("Adding route: {} via {} dev {} metric {} (advertised next hop: {})",
-                               route.destination,
-                               if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
-                               route.interface,
-                               route.metric,
-                               if advertised_next_hop.is_unspecified() { "direct".to_string() } else { advertised_next_hop.to_string() });
-
-                            new_routes.push(route);
-                            processed_routes += 1;
+                    for (name, interface) in &router_interfaces {
+                        // Check if the sender is reachable through this interface
+                        if interface.network.contains(sender_ip) {
+                            if interface.metric < best_metric {
+                                best_interface = Some((name.clone(), interface.clone()));
+                                best_metric = interface.metric;
+                            }
                         }
                     }
-                    drop(router_guard);
+
+                    if let Some((interface_name, interface_info)) = best_interface {
+                        // Determine the correct next hop
+                        let actual_next_hop = if advertised_next_hop.is_unspecified() {
+                            // If the advertised next hop is 0.0.0.0 (direct route from sender),
+                            // then the sender is the next hop for us
+                            sender_ip
+                        } else {
+                            // Check if the advertised next hop is directly reachable
+                            let mut use_advertised = false;
+                            for (_, local_interface) in &router_interfaces {
+                                if local_interface.network.contains(advertised_next_hop) {
+                                    use_advertised = true;
+                                    break;
+                                }
+                            }
+
+                            if use_advertised {
+                                advertised_next_hop
+                            } else {
+                                // The advertised next hop is not directly reachable,
+                                // so we use the sender as our next hop
+                                sender_ip
+                            }
+                        };
+
+                        let route = RouteEntry {
+                            destination,
+                            next_hop: actual_next_hop,
+                            interface: interface_name,
+                            metric: route_info.metric + 1, // Add 1 for the hop
+                            source: RouteSource::Protocol,
+                        };
+
+                        debug!("Prepared route: {} via {} dev {} metric {} (from advertised next hop: {})",
+                           route.destination,
+                           if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
+                           route.interface,
+                           route.metric,
+                           if advertised_next_hop.is_unspecified() { "direct".to_string() } else { advertised_next_hop.to_string() });
+
+                        new_routes.push(route);
+                        processed_routes += 1;
+                    } else {
+                        debug!("No suitable interface found for route to {} from sender {}", destination, sender_ip);
+                    }
+                } else {
+                    warn!("Invalid next hop in route: {}", route_info.next_hop);
                 }
+            } else {
+                warn!("Invalid destination in route: {}", corrected_destination);
             }
         }
 
@@ -529,6 +554,8 @@ impl SimpleRoutingProtocol {
             router_guard.update_routing_table(new_routes).await.expect("Router guard failed to update routing table");
             info!("✓ Updated routing table with {} new routes", processed_routes);
             drop(router_guard);
+        } else {
+            debug!("No new routes to add from this update");
         }
 
         Ok(())

@@ -23,21 +23,45 @@ pub struct RouteEntry {
 pub struct RoutingTable {
     routes: Vec<RouteEntry>,
     route_handle: net_route::Handle,
+    local_networks: Vec<Ipv4Network>,
 }
 
 impl RoutingTable {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let route_handle = net_route::Handle::new()?;
 
+        // Discover local networks at startup
+        let local_networks = Self::discover_local_networks();
+        debug!("Discovered local networks: {:?}", local_networks);
+
         Ok(Self {
             routes: Vec::new(),
             route_handle,
+            local_networks,
         })
+    }
+
+    fn discover_local_networks() -> Vec<Ipv4Network> {
+        let mut networks = Vec::new();
+        let interfaces = datalink::interfaces();
+
+        for iface in interfaces {
+            if iface.is_up() && !iface.is_loopback() {
+                for ip_network in iface.ips {
+                    if let IpNetwork::V4(ipv4_network) = ip_network {
+                        networks.push(ipv4_network);
+                        debug!("Found local network: {} on interface {}", ipv4_network, iface.name);
+                    }
+                }
+            }
+        }
+
+        networks
     }
 
     pub async fn add_route(&mut self, route: RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
         // Validate route before adding
-        if !self.is_valid_route(&route).await? {
+        if !self.is_valid_route(&route) {
             debug!("Route validation failed for {}", route.destination);
             return Ok(());
         }
@@ -99,64 +123,65 @@ impl RoutingTable {
         self.routes.iter().position(|route| route.destination == *destination)
     }
 
-    async fn is_valid_route(&self, route: &RouteEntry) -> Result<bool, Box<dyn std::error::Error>> {
+    fn is_valid_route(&self, route: &RouteEntry) -> bool {
         // Skip validation for direct routes
         if route.source == RouteSource::Direct {
-            return Ok(true);
+            return true;
         }
 
         // Check if gateway is valid
-        if route.next_hop.is_loopback() || route.next_hop.is_unspecified() {
-            debug!("Invalid gateway: {}", route.next_hop);
-            return Ok(false);
+        if route.next_hop.is_loopback() {
+            debug!("Invalid gateway (loopback): {}", route.next_hop);
+            return false;
         }
 
-        // Check if gateway is reachable (in local network)
-        let interfaces = datalink::interfaces();
-        let mut gateway_is_local = false;
+        // Allow unspecified for direct routes
+        if route.next_hop.is_unspecified() && route.source != RouteSource::Direct {
+            debug!("Invalid gateway (unspecified for non-direct route): {}", route.next_hop);
+            return false;
+        }
 
-        for iface in interfaces {
-            for ip_network in iface.ips {
-                if let IpNetwork::V4(ipv4_network) = ip_network {
-                    if ipv4_network.contains(route.next_hop) {
-                        debug!("Gateway {} found in local network {}", route.next_hop, ipv4_network);
-                        gateway_is_local = true;
-                        break;
-                    }
-                }
+        // Check if we're not adding a route to our own local network
+        for local_net in &self.local_networks {
+            if route.destination.network() == local_net.network() &&
+                route.destination.prefix() == local_net.prefix() {
+                debug!("Skipping route to local network {}", route.destination);
+                return false;
             }
-            if gateway_is_local { break; }
+        }
+
+        // Check if gateway is reachable (in one of our local networks)
+        let mut gateway_is_local = false;
+        for local_net in &self.local_networks {
+            if local_net.contains(route.next_hop) {
+                debug!("Gateway {} found in local network {}", route.next_hop, local_net);
+                gateway_is_local = true;
+                break;
+            }
         }
 
         if !gateway_is_local {
             debug!("Gateway {} is not in any local network", route.next_hop);
-            return Ok(false);
+            return false;
         }
 
-        // Check if we're not adding a route to our own local network
-        let interfaces = datalink::interfaces();
-        for iface in interfaces {
-            for ip_network in iface.ips {
-                if let IpNetwork::V4(local_net) = ip_network {
-                    if route.destination.network() == local_net.network() &&
-                        route.destination.prefix() == local_net.prefix() {
-                        debug!("Skipping route to local network {}", route.destination);
-                        return Ok(false);
-                    }
-                }
-            }
-        }
-
-        Ok(true)
+        true
     }
 
     async fn add_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
         info!("🚀 Adding route via net-route: {} via {} metric {}",
               route.destination, route.next_hop, route.metric);
 
+        // Create the route with proper network address (not host address)
+        let destination_network = route.destination.network();
+        let prefix_len = route.destination.prefix();
+
+        debug!("Creating route: network={}, prefix={}, gateway={}",
+               destination_network, prefix_len, route.next_hop);
+
         let net_route = net_route::Route::new(
-            IpAddr::V4(route.destination.network()),
-            route.destination.prefix()
+            IpAddr::V4(destination_network),
+            prefix_len
         ).with_gateway(IpAddr::V4(route.next_hop));
 
         match self.route_handle.add(&net_route).await {
@@ -167,8 +192,9 @@ impl RoutingTable {
             Err(e) => {
                 debug!("Route add failed, trying to update: {}", e);
 
-                // Try to delete and re-add
+                // Try to delete and re-add (common for updating routes)
                 let _ = self.route_handle.delete(&net_route).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
                 match self.route_handle.add(&net_route).await {
                     Ok(_) => {
@@ -200,9 +226,37 @@ impl RoutingTable {
             },
             Err(e) => {
                 debug!("Route delete failed (may not exist): {}", e);
+
+                // Try with ip command as fallback
+                let _ = self.delete_route_with_ip_command(route).await;
                 Ok(()) // Not a critical error
             }
         }
+    }
+
+    async fn delete_route_with_ip_command(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        use tokio::process::Command;
+
+        let mut cmd = Command::new("ip");
+        cmd.args(&["route", "del", &route.destination.to_string()]);
+
+        if !route.next_hop.is_unspecified() {
+            cmd.args(&["via", &route.next_hop.to_string()]);
+        }
+
+        let output = cmd.output().await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug!("ip route del failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    pub fn refresh_local_networks(&mut self) {
+        self.local_networks = Self::discover_local_networks();
+        debug!("Refreshed local networks: {:?}", self.local_networks);
     }
 }
 
