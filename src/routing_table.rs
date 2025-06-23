@@ -169,7 +169,7 @@ impl RoutingTable {
     }
 
     async fn add_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        info!("🚀 Adding route via net-route: {} via {} metric {}",
+        info!("Adding route via net-route: {} via {} metric {}",
               route.destination, route.next_hop, route.metric);
 
         // Create the route with proper network address (not host address)
@@ -186,7 +186,7 @@ impl RoutingTable {
 
         match self.route_handle.add(&net_route).await {
             Ok(_) => {
-                info!("✅ Successfully added route: {}", route.destination);
+                info!("Successfully added route: {}", route.destination);
                 Ok(())
             },
             Err(e) => {
@@ -198,11 +198,11 @@ impl RoutingTable {
 
                 match self.route_handle.add(&net_route).await {
                     Ok(_) => {
-                        info!("✅ Successfully updated route: {}", route.destination);
+                        info!("Successfully updated route: {}", route.destination);
                         Ok(())
                     },
                     Err(e2) => {
-                        warn!("❌ Failed to add/update route {}: {}", route.destination, e2);
+                        warn!("Failed to add/update route {}: {}", route.destination, e2);
                         // Don't fail completely - just log the error
                         Ok(())
                     }
@@ -221,7 +221,7 @@ impl RoutingTable {
 
         match self.route_handle.delete(&net_route).await {
             Ok(_) => {
-                info!("✅ Successfully deleted route: {}", route.destination);
+                info!("Successfully deleted route: {}", route.destination);
                 Ok(())
             },
             Err(e) => {
