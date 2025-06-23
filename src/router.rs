@@ -17,7 +17,8 @@ pub struct Router {
 }
 
 impl Router {
-    pub fn new(
+    // Make this async since RoutingTable::new() is async
+    pub async fn new(
         id: String,
         mut network: Network,
         interface_names: Vec<String>,
@@ -27,19 +28,21 @@ impl Router {
         network.discover_interfaces(&interface_names)?;
         let interfaces = network.get_interfaces().clone();
 
-        let mut routing_table = RoutingTable::new();
+        // Await the async RoutingTable::new()
+        let mut routing_table = RoutingTable::new().await?;
 
-        // Ajouter les routes directes
+        // Add direct routes
         for (name, interface_info) in &interfaces {
             let route = RouteEntry {
                 destination: interface_info.network,
-                next_hop: std::net::Ipv4Addr::new(0, 0, 0, 0), // Route directe
+                next_hop: std::net::Ipv4Addr::new(0, 0, 0, 0), // Direct route
                 interface: name.clone(),
                 metric: 0,
                 source: RouteSource::Direct,
             };
 
-            routing_table.add_route(route)?; // Maintenant ça fonctionne car add_route retourne Result
+            // Await the async add_route
+            routing_table.add_route(route).await?;
         }
 
         Ok(Router {
@@ -57,12 +60,13 @@ impl Router {
         }
     }
 
-    pub fn update_routing_table(&mut self, new_routes: Vec<RouteEntry>) -> Result<(), Box<dyn std::error::Error>> {
+    // Make this async too since add_route is async
+    pub async fn update_routing_table(&mut self, new_routes: Vec<RouteEntry>) -> Result<(), Box<dyn std::error::Error>> {
         for route in new_routes {
-            // Vérifier si une meilleure route existe déjà
+            // Check if a better route already exists
             if !self.routing_table.has_better_route(&route) {
-                // Ajouter la route (elle gèrera elle-même l'ajout système)
-                self.routing_table.add_route(route)?;
+                // Add the route (await since it's async)
+                self.routing_table.add_route(route).await?;
             }
         }
 

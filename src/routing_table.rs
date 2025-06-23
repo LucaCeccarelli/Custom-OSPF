@@ -1,7 +1,8 @@
 use ipnetwork::Ipv4Network;
-use log::{info, warn};
-use std::net::Ipv4Addr;
-use std::process::Command;
+use log::{info, warn, debug};
+use std::net::{Ipv4Addr, IpAddr};
+use pnet::datalink;
+use pnet::ipnetwork::IpNetwork;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RouteSource {
@@ -21,51 +22,57 @@ pub struct RouteEntry {
 
 pub struct RoutingTable {
     routes: Vec<RouteEntry>,
+    route_handle: net_route::Handle,
 }
 
 impl RoutingTable {
-    pub fn new() -> Self {
-        Self {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let route_handle = net_route::Handle::new()?;
+
+        Ok(Self {
             routes: Vec::new(),
-        }
+            route_handle,
+        })
     }
 
-    pub fn add_route(&mut self, route: RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        // Vérifier si une route identique existe déjà
+    pub async fn add_route(&mut self, route: RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        // Validate route before adding
+        if !self.is_valid_route(&route).await? {
+            debug!("Route validation failed for {}", route.destination);
+            return Ok(());
+        }
+
+        // Check if route already exists
         if let Some(existing_index) = self.find_route_index(&route.destination) {
             let existing_route = &self.routes[existing_index];
-
-            // Si la nouvelle route a une meilleure métrique, remplacer
             if route.metric < existing_route.metric {
-                info!("Updating route to {} (old metric: {}, new metric: {})", 
+                info!("Updating route to {} (old metric: {}, new metric: {})",
                       route.destination, existing_route.metric, route.metric);
 
-                // Supprimer l'ancienne route du système
-                self.delete_system_route(existing_route.destination)?;
+                // Delete old route
+                self.delete_system_route(existing_route).await?;
 
-                // Remplacer dans notre table
+                // Update in our table
                 self.routes[existing_index] = route.clone();
 
-                // Ajouter la nouvelle route au système
-                self.add_system_route(&route)?;
+                // Add new route
+                if route.source != RouteSource::Direct {
+                    self.add_system_route(&route).await?;
+                }
             } else {
-                // Garder la route existante (meilleure métrique)
+                debug!("Keeping existing route with better metric");
                 return Ok(());
             }
         } else {
-            // Nouvelle route
-            info!("Adding new route to {} via {} metric {}", 
-                  route.destination, 
+            info!("Adding new route to {} via {} metric {}",
+                  route.destination,
                   if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
                   route.metric);
 
             self.routes.push(route.clone());
 
-            println!("🔍 DEBUG: Route source = {:?}, calling add_system_route = {}",
-                     route.source, route.source != RouteSource::Direct);
-            // Ajouter au système seulement si ce n'est pas une route directe
             if route.source != RouteSource::Direct {
-                self.add_system_route(&route)?;
+                self.add_system_route(&route).await?;
             }
         }
 
@@ -92,61 +99,127 @@ impl RoutingTable {
         self.routes.iter().position(|route| route.destination == *destination)
     }
 
-    fn add_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::new("ip");
-        cmd.args(&["route", "add", &route.destination.to_string()]);
-
-        if !route.next_hop.is_unspecified() {
-            cmd.args(&["via", &route.next_hop.to_string()]);
+    async fn is_valid_route(&self, route: &RouteEntry) -> Result<bool, Box<dyn std::error::Error>> {
+        // Skip validation for direct routes
+        if route.source == RouteSource::Direct {
+            return Ok(true);
         }
 
-        cmd.args(&["dev", &route.interface]);
-        cmd.args(&["metric", &route.metric.to_string()]);
+        // Check if gateway is valid
+        if route.next_hop.is_loopback() || route.next_hop.is_unspecified() {
+            debug!("Invalid gateway: {}", route.next_hop);
+            return Ok(false);
+        }
 
-        println!("🔧 DEBUG: Executing command: {:?}", cmd);
+        // Check if gateway is reachable (in local network)
+        let interfaces = datalink::interfaces();
+        let mut gateway_is_local = false;
 
-        let output = cmd.output()?;
+        for iface in interfaces {
+            for ip_network in iface.ips {
+                if let IpNetwork::V4(ipv4_network) = ip_network {
+                    if ipv4_network.contains(route.next_hop) {
+                        debug!("Gateway {} found in local network {}", route.next_hop, ipv4_network);
+                        gateway_is_local = true;
+                        break;
+                    }
+                }
+            }
+            if gateway_is_local { break; }
+        }
 
-        if output.status.success() {
-            info!("✓ Added system route: {} via {} dev {}", 
-                  route.destination, 
-                  if route.next_hop.is_unspecified() { "direct".to_string() } else { route.next_hop.to_string() },
-                  route.interface);
-        } else {
-            let error = String::from_utf8_lossy(&output.stderr);
-            // Ne pas considérer "File exists" comme une erreur fatale
-            if !error.contains("File exists") {
-                warn!("Failed to add system route: {}: {}", route.destination, error);
+        if !gateway_is_local {
+            debug!("Gateway {} is not in any local network", route.next_hop);
+            return Ok(false);
+        }
+
+        // Check if we're not adding a route to our own local network
+        let interfaces = datalink::interfaces();
+        for iface in interfaces {
+            for ip_network in iface.ips {
+                if let IpNetwork::V4(local_net) = ip_network {
+                    if route.destination.network() == local_net.network() &&
+                        route.destination.prefix() == local_net.prefix() {
+                        debug!("Skipping route to local network {}", route.destination);
+                        return Ok(false);
+                    }
+                }
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 
-    fn delete_system_route(&self, destination: Ipv4Network) -> Result<(), Box<dyn std::error::Error>> {
-        let output = Command::new("ip")
-            .args(&["route", "del", &destination.to_string()])
-            .output()?;
+    async fn add_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        info!("🚀 Adding route via net-route: {} via {} metric {}",
+              route.destination, route.next_hop, route.metric);
 
-        if output.status.success() {
-            info!("✓ Deleted system route: {}", destination);
-        } else {
-            let error = String::from_utf8_lossy(&output.stderr);
-            if !error.contains("No such process") {
-                warn!("Failed to delete system route: {}: {}", destination, error);
+        let net_route = net_route::Route::new(
+            IpAddr::V4(route.destination.network()),
+            route.destination.prefix()
+        ).with_gateway(IpAddr::V4(route.next_hop));
+
+        match self.route_handle.add(&net_route).await {
+            Ok(_) => {
+                info!("✅ Successfully added route: {}", route.destination);
+                Ok(())
+            },
+            Err(e) => {
+                debug!("Route add failed, trying to update: {}", e);
+
+                // Try to delete and re-add
+                let _ = self.route_handle.delete(&net_route).await;
+
+                match self.route_handle.add(&net_route).await {
+                    Ok(_) => {
+                        info!("✅ Successfully updated route: {}", route.destination);
+                        Ok(())
+                    },
+                    Err(e2) => {
+                        warn!("❌ Failed to add/update route {}: {}", route.destination, e2);
+                        // Don't fail completely - just log the error
+                        Ok(())
+                    }
+                }
             }
         }
+    }
 
-        Ok(())
+    async fn delete_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        info!("🗑️ Deleting route: {}", route.destination);
+
+        let net_route = net_route::Route::new(
+            IpAddr::V4(route.destination.network()),
+            route.destination.prefix()
+        ).with_gateway(IpAddr::V4(route.next_hop));
+
+        match self.route_handle.delete(&net_route).await {
+            Ok(_) => {
+                info!("✅ Successfully deleted route: {}", route.destination);
+                Ok(())
+            },
+            Err(e) => {
+                debug!("Route delete failed (may not exist): {}", e);
+                Ok(()) // Not a critical error
+            }
+        }
     }
 }
 
 impl Drop for RoutingTable {
     fn drop(&mut self) {
-        // Nettoyer les routes du protocole au shutdown
+        // Clean up protocol routes on shutdown
         for route in &self.routes {
             if route.source == RouteSource::Protocol {
-                let _ = self.delete_system_route(route.destination);
+                let net_route = net_route::Route::new(
+                    IpAddr::V4(route.destination.network()),
+                    route.destination.prefix()
+                ).with_gateway(IpAddr::V4(route.next_hop));
+
+                // Use blocking version in Drop
+                if let Err(e) = futures::executor::block_on(self.route_handle.delete(&net_route)) {
+                    warn!("Failed to cleanup route {}: {}", route.destination, e);
+                }
             }
         }
     }

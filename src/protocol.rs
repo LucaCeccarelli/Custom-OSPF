@@ -49,11 +49,12 @@ impl SimpleRoutingProtocol {
         network: Network,
         debug_mode: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Fix 1: Add .await to the Router::new() call
         let router = Router::new(
             router_id,
             network,
             interface_names.into_iter().collect(),
-        )?;
+        ).await?;
 
         // Create sockets - bind to 0.0.0.0 to receive broadcasts
         let mut sockets = Vec::new();
@@ -426,7 +427,7 @@ impl SimpleRoutingProtocol {
     // Version statique de process_routing_update
     async fn process_routing_update_static(
         update: RoutingUpdate,
-        sender_addr: SocketAddr, 
+        sender_addr: SocketAddr,
         router: &Arc<Mutex<Router>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
@@ -498,10 +499,9 @@ impl SimpleRoutingProtocol {
             }
         }
 
-        // Rest of your existing code...
         if processed_routes > 0 {
             let mut router_guard = router.lock().await;
-            router_guard.update_routing_table(new_routes).expect("Router guard failed to update routing table");
+            router_guard.update_routing_table(new_routes).await.expect("Router guard failed to update routing table");
             info!("✓ Updated routing table with {} new routes", processed_routes);
             drop(router_guard);
         }
