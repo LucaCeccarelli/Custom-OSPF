@@ -326,16 +326,18 @@ impl SimpleRoutingProtocol {
                 let mut buffer = [0u8; 4096];
 
                 loop {
+                    debug!("Waiting to receive message...");
                     match socket_clone.recv_from(&mut buffer).await { // Use socket_clone
                         Ok((len, addr)) => {
                             // Filtrer les messages de nos propres IPs (anti-loopback)
-                            if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
-                                if our_ips_clone.contains(&ipv4_addr) {
-                                    debug!("Ignoring loopback message from our own IP: {}", addr.ip());
-                                    continue;
-                                }
-                            }
-
+                            //if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
+                            //    if our_ips_clone.contains(&ipv4_addr) {
+                            //        debug!("Ignoring loopback message from our own IP: {}", addr.ip());
+                            //        continue;
+                            //    }
+                            //}
+                            debug!("Received {} bytes from {}: {:?}", len, addr, &buffer[..len]);
+                            
                             let data = String::from_utf8_lossy(&buffer[..len]);
                             debug!("Socket {} received {} bytes from {}: {}", i, len, addr, data);
 
