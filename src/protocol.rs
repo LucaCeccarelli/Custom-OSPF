@@ -55,31 +55,30 @@ impl SimpleRoutingProtocol {
             interface_names.into_iter().collect(),
         )?;
 
-        // Créer un socket pour chaque interface
+        // Create sockets - bind to 0.0.0.0 to receive broadcasts
         let mut sockets = Vec::new();
         let mut our_ips = HashSet::new();
 
-        for (_, interface) in &router.interfaces {
-            // Bind sur l'IP spécifique de chaque interface
-            let bind_addr = format!("{}:{}", interface.ip, port);
+        // Option 1: Single socket approach (recommended)
+        let bind_addr = format!("0.0.0.0:{}", port);
+        match UdpSocket::bind(&bind_addr).await {
+            Ok(socket) => {
+                socket.set_broadcast(true)?;
 
-            match UdpSocket::bind(&bind_addr).await {
-                Ok(socket) => {
-                    socket.set_broadcast(true)?;
-                    info!("✓ Socket bound to {} on interface {}", bind_addr, interface.name);
-                    sockets.push(Arc::new(socket)); // Wrap in Arc
+                // Additional socket options for better broadcast handling
+                //let socket2 = socket2::Socket::from(std::os::unix::io::AsRawFd::as_raw_fd(&socket));
+                //socket2.set_reuse_address(true)?;
+
+                info!("✓ Socket bound to {} for all interfaces", bind_addr);
+                sockets.push(Arc::new(socket));
+
+                // Collect all our IPs
+                for (_, interface) in &router.interfaces {
                     our_ips.insert(interface.ip);
                 }
-                Err(e) => {
-                    warn!("✗ Failed to bind to {}: {}", bind_addr, e);
-                    // Fallback: essayer de bind sur 0.0.0.0 pour cette interface
-                    let fallback_addr = format!("0.0.0.0:{}", port);
-                    let socket = UdpSocket::bind(&fallback_addr).await?;
-                    socket.set_broadcast(true)?;
-                    info!("✓ Fallback socket bound to {} for interface {}", fallback_addr, interface.name);
-                    sockets.push(Arc::new(socket)); // Wrap in Arc
-                    our_ips.insert(interface.ip);
-                }
+            }
+            Err(e) => {
+                return Err(format!("Failed to bind socket: {}", e).into());
             }
         }
 
@@ -313,11 +312,10 @@ impl SimpleRoutingProtocol {
 
         info!("Started listening for messages on {} sockets...", self.sockets.len());
 
-        // Créer une tâche d'écoute pour chaque socket
         let mut tasks = Vec::new();
 
         for (i, socket) in self.sockets.iter().enumerate() {
-            let socket_clone = socket.clone(); 
+            let socket_clone = socket.clone();
             let router_clone = router.clone();
             let neighbors_clone = neighbors.clone();
             let our_ips_clone = self.our_ips.clone();
@@ -326,18 +324,16 @@ impl SimpleRoutingProtocol {
                 let mut buffer = [0u8; 4096];
 
                 loop {
-                    debug!("Waiting to receive message...");
-                    match socket_clone.recv_from(&mut buffer).await { // Use socket_clone
+                    match socket_clone.recv_from(&mut buffer).await {
                         Ok((len, addr)) => {
-                            // Filtrer les messages de nos propres IPs (anti-loopback)
-                            //if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
-                            //    if our_ips_clone.contains(&ipv4_addr) {
-                            //        debug!("Ignoring loopback message from our own IP: {}", addr.ip());
-                            //        continue;
-                            //    }
-                            //}
-                            debug!("Received {} bytes from {}: {:?}", len, addr, &buffer[..len]);
-                            
+                            // Filter loopback messages
+                            if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
+                                if our_ips_clone.contains(&ipv4_addr) {
+                                    debug!("Ignoring loopback message from our own IP: {}", addr.ip());
+                                    continue;
+                                }
+                            }
+
                             let data = String::from_utf8_lossy(&buffer[..len]);
                             debug!("Socket {} received {} bytes from {}: {}", i, len, addr, data);
 
@@ -347,6 +343,8 @@ impl SimpleRoutingProtocol {
                         }
                         Err(e) => {
                             error!("Socket {} failed to receive message: {}", i, e);
+                            // Add a small delay to prevent tight error loops
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                         }
                     }
                 }
@@ -355,11 +353,10 @@ impl SimpleRoutingProtocol {
             tasks.push(task);
         }
 
-        // Attendre toutes les tâches d'écoute
         futures::future::join_all(tasks).await;
-
         Ok(())
     }
+
 
     // Version statique de handle_message pour être utilisée dans les tâches async
     async fn handle_message_static(
