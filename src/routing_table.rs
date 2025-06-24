@@ -127,7 +127,7 @@ impl RoutingTable {
             // Remove from our internal table
             self.routes.remove(index);
 
-            info!("✓ Successfully removed route to {}", route.destination);
+            info!("Successfully removed route to {}", route.destination);
         } else {
             debug!("Route to {} not found for removal", route.destination);
         }
@@ -159,7 +159,7 @@ impl RoutingTable {
         }
 
         if !removed_routes.is_empty() {
-            info!("✓ Removed {} routes via dead neighbor {}", removed_routes.len(), next_hop);
+            info!("Removed {} routes via dead neighbor {}", removed_routes.len(), next_hop);
         }
 
         Ok(removed_routes)

@@ -28,11 +28,11 @@ impl Network {
 
         for interface_name in interface_names {
             if let Ok(interface_info) = self.get_interface_info(interface_name) {
-                info!("✓ Found interface: {} -> {} ({})", 
+                info!("Found interface: {} -> {} ({})", 
                       interface_info.name, interface_info.ip, interface_info.network);
                 self.interfaces.insert(interface_name.clone(), interface_info);
             } else {
-                warn!("✗ Interface {} not found or has no IP", interface_name);
+                warn!("Interface {} not found or has no IP", interface_name);
             }
         }
 

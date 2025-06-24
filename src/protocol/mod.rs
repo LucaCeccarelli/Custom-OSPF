@@ -59,7 +59,7 @@ impl SimpleRoutingProtocol {
         match UdpSocket::bind(&bind_addr).await {
             Ok(socket) => {
                 socket.set_broadcast(true)?;
-                info!("✓ Socket bound to {} for all interfaces", bind_addr);
+                info!("Socket bound to {} for all interfaces", bind_addr);
                 sockets.push(Arc::new(socket));
 
                 for (_, interface) in &router.interfaces {
@@ -111,7 +111,7 @@ impl SimpleRoutingProtocol {
         }
 
         task_manager::start_tasks(self).await?;
-        info!("✓ Routing protocol started successfully");
+        info!("Routing protocol started successfully");
         Ok(())
     }
 
@@ -137,7 +137,7 @@ impl SimpleRoutingProtocol {
             }
         }
 
-        info!("✓ Routing protocol stopped successfully");
+        info!("Routing protocol stopped successfully");
         Ok(())
     }
 

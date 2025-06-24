@@ -68,7 +68,7 @@ pub async fn start_tasks(protocol: &SimpleRoutingProtocol) -> Result<(), Box<dyn
         handles_guard.push(debug_handle);
     }
 
-    info!("✓ All protocol tasks started");
+    info!("All protocol tasks started");
     Ok(())
 }
 
@@ -224,7 +224,7 @@ async fn send_hello_messages(
                     if let Err(e) = socket.send_to(hello_packet.as_bytes(), target_addr).await {
                         warn!("Failed to send hello from {} to {}: {}", interface.ip, target_addr, e);
                     } else {
-                        debug!("✓ Sent HELLO from {} to {}", interface.ip, target_addr);
+                        debug!("Sent HELLO from {} to {}", interface.ip, target_addr);
                     }
                 }
             }
@@ -306,7 +306,7 @@ async fn send_routing_updates(
                     if let Err(e) = socket.send_to(update_packet.as_bytes(), target_addr).await {
                         warn!("Failed to send update from {} to {}: {}", interface.ip, target_addr, e);
                     } else {
-                        debug!("✓ Sent UPDATE from {} to {} with {} routes (seq: {})",
+                        debug!("Sent UPDATE from {} to {} with {} routes (seq: {})",
                               interface.ip, target_addr, update.routes.len(), current_seq);
                     }
                 }
@@ -468,7 +468,7 @@ async fn handle_hello_message_static(
     }
     drop(router_guard);
 
-    debug!("← Received HELLO from {} at {}", hello.router_id, addr);
+    debug!("Received HELLO from {} at {}", hello.router_id, addr);
 
     let router_info = crate::router::RouterInfo {
         router_id: hello.router_id.clone(),
@@ -500,7 +500,7 @@ async fn handle_hello_message_static(
     neighbors_guard.insert(hello.router_id.clone(), neighbor_info);
 
     if was_dead {
-        info!("🟢 Neighbor {} is now ALIVE at {}", hello.router_id, addr);
+        info!("Neighbor {} is now ALIVE at {}", hello.router_id, addr);
     }
 
     Ok(())
@@ -521,7 +521,7 @@ async fn handle_update_message_static(
     }
     drop(router_guard);
 
-    debug!("← Received UPDATE from {} with {} routes (seq: {})",
+    debug!("Received UPDATE from {} with {} routes (seq: {})",
           update.router_id, update.routes.len(), update.sequence);
 
     // Update neighbor last seen time
@@ -530,7 +530,7 @@ async fn handle_update_message_static(
         if let Some(neighbor_info) = neighbors_guard.get_mut(&update.router_id) {
             neighbor_info.last_seen = Instant::now();
             if !neighbor_info.is_alive {
-                info!("🟢 Neighbor {} is now ALIVE again (via UPDATE)", update.router_id);
+                info!("Neighbor {} is now ALIVE again (via UPDATE)", update.router_id);
                 neighbor_info.is_alive = true;
             }
         }
@@ -559,7 +559,7 @@ async fn handle_neighbor_request_static(
 
     // Check if this request is for us
     if request.target_router_id == our_router_id {
-        info!("← Received NEIGHBOR_REQUEST from {} for us (request_id: {})",
+        info!("Received NEIGHBOR_REQUEST from {} for us (request_id: {})",
                request.requesting_router_id, request.request_id);
 
         // Get our current neighbors
@@ -582,7 +582,7 @@ async fn handle_neighbor_request_static(
                 if let Err(e) = socket.send_to(response_packet.as_bytes(), addr).await {
                     warn!("Failed to send neighbor response to {}: {}", addr, e);
                 } else {
-                    info!("→ Sent NEIGHBOR_RESPONSE to {} with {} neighbors)",
+                    info!("Sent NEIGHBOR_RESPONSE to {} with {} neighbors)",
                            addr, neighbor_response.neighbors.len());
                 }
             }
@@ -600,7 +600,7 @@ async fn handle_neighbor_response_static(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response: NeighborResponse = serde_json::from_str(response_data)?;
 
-    info!("← Received NEIGHBOR_RESPONSE from {} with {} neighbors (request_id: {})",
+    info!("Received NEIGHBOR_RESPONSE from {} with {} neighbors (request_id: {})",
            response.responding_router_id, response.neighbors.len(), response.request_id);
 
     // Check if we have a pending request for this response
@@ -623,7 +623,7 @@ async fn handle_neighbor_response_static(
             warn!("Failed to send neighbor response through channel (request_id: {})",
                   response.request_id);
         } else {
-            info!("✓ Successfully delivered neighbor information for router {} (request_id: {})",
+            info!("Successfully delivered neighbor information for router {} (request_id: {})",
                   response.responding_router_id, response.request_id);
         }
     } else {
@@ -674,13 +674,13 @@ async fn perform_cleanup(
         for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
             if now.duration_since(neighbor_info.last_seen) > SimpleRoutingProtocol::NEIGHBOR_TIMEOUT {
                 if neighbor_info.is_alive {
-                    warn!("X Neighbor {} is now considered DEAD (last seen: {:?} ago)",
+                    warn!("Neighbor {} is now considered DEAD (last seen: {:?} ago)",
                           neighbor_id, now.duration_since(neighbor_info.last_seen));
                     neighbor_info.is_alive = false;
                     dead_neighbors.push(neighbor_id.clone());
                 }
             } else if !neighbor_info.is_alive {
-                info!("O Neighbor {} is now ALIVE again", neighbor_id);
+                info!("Neighbor {} is now ALIVE again", neighbor_id);
                 neighbor_info.is_alive = true;
             }
         }
@@ -720,7 +720,7 @@ async fn perform_cleanup(
             let mut router_guard = router.lock().await;
             if let Ok(removed_routes) = router_guard.routing_table.remove_routes_via_nexthop(dead_neighbor_ip).await {
                 if !removed_routes.is_empty() {
-                    info!("V Successfully removed {} routes via dead neighbor {}",
+                    info!("Successfully removed {} routes via dead neighbor {}",
                           removed_routes.len(), dead_neighbor_ip);
                 }
             }

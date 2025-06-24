@@ -207,7 +207,7 @@ async fn apply_new_routes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut router_guard = router.lock().await;
     router_guard.update_routing_table(new_routes).await?;
-    info!("✓ Updated routing table with routes from {}", advertising_router);
+    info!("Updated routing table with routes from {}", advertising_router);
     Ok(())
 }
 
@@ -227,7 +227,7 @@ pub async fn remove_routes_via_nexthop(
             if let Err(e) = router_guard.routing_table.remove_route(&route_state.route).await {
                 warn!("Failed to remove route to {}: {}", destination, e);
             } else {
-                info!("V Successfully removed route to {} from system", destination);
+                info!("Successfully removed route to {} from system", destination);
             }
         }
     }

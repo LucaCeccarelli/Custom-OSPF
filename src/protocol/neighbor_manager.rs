@@ -83,7 +83,7 @@ pub async fn request_neighbors_from_router(
         });
     }
 
-    info!("→ Requesting neighbors from router {} (request_id: {})", target_router_id, request_id);
+    info!("Requesting neighbors from router {} (request_id: {})", target_router_id, request_id);
 
     // Send the request as a broadcast
     send_neighbor_request(protocol, &neighbor_request).await;
@@ -91,7 +91,7 @@ pub async fn request_neighbors_from_router(
     // Wait for response with timeout
     match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
         Ok(Ok(neighbors)) => {
-            info!("✓ Received neighbor information for router {} ({} neighbors)", target_router_id, neighbors.len());
+            info!("Received neighbor information for router {} ({} neighbors)", target_router_id, neighbors.len());
             Some(neighbors)
         }
         Ok(Err(_)) => {
@@ -121,7 +121,7 @@ async fn send_neighbor_request(protocol: &SimpleRoutingProtocol, request: &Neigh
                     if let Err(e) = socket.send_to(request_packet.as_bytes(), target_addr).await {
                         warn!("Failed to send neighbor request to {}: {}", target_addr, e);
                     } else {
-                        debug!("✓ Sent NEIGHBOR_REQUEST to {} for router {}", target_addr, request.target_router_id);
+                        debug!("Sent NEIGHBOR_REQUEST to {} for router {}", target_addr, request.target_router_id);
                     }
                 }
             }
