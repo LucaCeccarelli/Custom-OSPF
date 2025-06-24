@@ -119,12 +119,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Start protocol automatically
     {
         let protocol_guard = control_server.protocol.lock().await;
         if let Some(protocol_ref) = protocol_guard.as_ref() {
-            if let Err(e) = protocol_ref.start_tasks().await {
-                error!("Failed to start protocol tasks: {}", e);
+            if let Err(e) = protocol_ref.start_protocol().await {
+                error!("Failed to start protocol: {}", e);
                 return Err(e);
             }
         }
