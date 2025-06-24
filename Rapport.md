@@ -92,6 +92,8 @@
 
 Le protocole développé est une implémentation simplifiée d'un protocole de routage à état de liens, inspiré d'OSPF mais avec des mécanismes adaptés aux contraintes spécifiées. Il est écrit en Rust et utilise une architecture modulaire avec un serveur de contrôle intégré.
 
+**Lien du dépôt GitHub :** [Custom OSPF](https://github.com/LucaCeccarelli/Custom-OSPF)
+
 ## 1. Fonctionnalités de Routage Principal
 
 ### 1.1 Calcul des meilleurs chemins
