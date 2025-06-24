@@ -1,6 +1,92 @@
 > **Luca Ceccarelli** - luca.ceccarelli@etu.mines-ales.fr
 
-# Rapport Fonctionnel 
+# Rapport Fonctionnel
+
+## Table des Matières
+
+- [Vue d'ensemble](#vue-densemble)
+- [1. Fonctionnalités de Routage Principal](#1-fonctionnalités-de-routage-principal)
+    - [1.1 Calcul des meilleurs chemins](#11-calcul-des-meilleurs-chemins)
+        - [Architecture du calcul de routes](#architecture-du-calcul-de-routes)
+        - [Mécanisme de sélection des meilleures routes](#mécanisme-de-sélection-des-meilleures-routes)
+        - [Support des routes directes](#support-des-routes-directes)
+    - [1.2 Mise à jour dynamique des chemins](#12-mise-à-jour-dynamique-des-chemins)
+        - [Détection des changements topologiques](#détection-des-changements-topologiques)
+        - [Mécanisme de mise à jour intelligent](#mécanisme-de-mise-à-jour-intelligent)
+        - [Gestion des timeouts et nettoyage](#gestion-des-timeouts-et-nettoyage)
+    - [1.3 Activation/Désactivation à la demande](#13-activationdésactivation-à-la-demande)
+        - [Architecture du serveur de contrôle](#architecture-du-serveur-de-contrôle)
+        - [Gestion des commandes de contrôle](#gestion-des-commandes-de-contrôle)
+        - [Mécanisme de démarrage/arrêt](#mécanisme-de-démarragearrêt)
+    - [1.4 Spécification des interfaces](#14-spécification-des-interfaces)
+        - [Configuration par ligne de commande](#configuration-par-ligne-de-commande)
+        - [Découverte automatique des propriétés réseau](#découverte-automatique-des-propriétés-réseau)
+        - [Validation et gestion d'erreurs](#validation-et-gestion-derreurs)
+    - [1.5 Modification de la table de routage IPv4](#15-modification-de-la-table-de-routage-ipv4)
+        - [Intégration système via net-route](#intégration-système-via-net-route)
+        - [Mécanisme de suppression](#mécanisme-de-suppression)
+        - [Validation avancée des routes](#validation-avancée-des-routes)
+    - [1.6 Mémorisation des voisins](#16-mémorisation-des-voisins)
+        - [Structure de données des voisins](#structure-de-données-des-voisins)
+        - [Traitement des messages Hello](#traitement-des-messages-hello)
+    - [1.7 Affichage des voisins à la demande](#17-affichage-des-voisins-à-la-demande)
+        - [Interface de consultation locale](#interface-de-consultation-locale)
+        - [Mécanisme de requête inter-routeurs](#mécanisme-de-requête-inter-routeurs)
+        - [Traitement des requêtes distantes](#traitement-des-requêtes-distantes)
+    - [1.8 Tolérance aux pannes](#18-tolérance-aux-pannes)
+        - [Détection multi-niveaux des pannes](#détection-multi-niveaux-des-pannes)
+        - [Mécanisme de recovery automatique](#mécanisme-de-recovery-automatique)
+        - [Gestion des pannes en cascade](#gestion-des-pannes-en-cascade)
+        - [Mécanisme de failover](#mécanisme-de-failover)
+- [2. Optimisations et Performance](#2-optimisations-et-performance)
+    - [2.1 Minimisation des échanges](#21-minimisation-des-échanges)
+        - [Stratégie de communication périodique](#stratégie-de-communication-périodique)
+        - [Évitement des boucles de routage](#évitement-des-boucles-de-routage)
+        - [Mécanisme de séquençage](#mécanisme-de-séquençage)
+    - [2.2 Minimisation mémoire](#22-minimisation-mémoire)
+        - [Architecture zero-copy avec Rust](#architecture-zero-copy-avec-rust)
+        - [Nettoyage automatique proactif](#nettoyage-automatique-proactif)
+        - [Structures de données compactes](#structures-de-données-compactes)
+    - [2.3 Minimisation du temps de convergence](#23-minimisation-du-temps-de-convergence)
+        - [Mécanismes de convergence présents](#mécanismes-de-convergence-présents)
+        - [Métriques de performance actuelles](#métriques-de-performance-actuelles)
+- [Rapport de Test - Validation des Fonctionnalités](#rapport-de-test---validation-des-fonctionnalités)
+    - [Vue d'ensemble](#vue-densemble-1)
+    - [1. Validation des Fonctionnalités Principales](#1-validation-des-fonctionnalités-principales)
+        - [1.1 Découverte et Mémorisation des Voisins](#11-découverte-et-mémorisation-des-voisins)
+        - [1.2 Calcul et Mise à Jour des Routes](#12-calcul-et-mise-à-jour-des-routes)
+        - [1.3 Mécanisme de Failover](#13-mécanisme-de-failover)
+        - [1.4 Interface de Contrôle](#14-interface-de-contrôle)
+        - [1.5 Requêtes Inter-Routeurs](#15-requêtes-inter-routeurs)
+    - [2. Validation de la Tolérance aux Pannes](#2-validation-de-la-tolérance-aux-pannes)
+        - [2.1 Détection de Voisin Mort](#21-détection-de-voisin-mort)
+        - [2.2 Nettoyage Automatique des Routes](#22-nettoyage-automatique-des-routes)
+        - [2.3 Recovery Automatique](#23-recovery-automatique)
+    - [3. Validation de l'Intégration Système](#3-validation-de-lintégration-système)
+        - [3.1 Modification Table de Routage](#31-modification-table-de-routage)
+        - [3.2 Validation des Routes](#32-validation-des-routes)
+    - [4. Tests de Performance](#4-tests-de-performance)
+        - [4.1 État Final du Système](#41-état-final-du-système)
+- [Rapport de Performance - Temps de Convergence](#rapport-de-performance---temps-de-convergence)
+    - [Vue d'ensemble](#vue-densemble-2)
+    - [1. Paramètres de Temporisation](#1-paramètres-de-temporisation)
+        - [Configuration des Intervalles](#configuration-des-intervalles)
+    - [2. Temps de Convergence - Démarrage à Froid](#2-temps-de-convergence---démarrage-à-froid)
+        - [2.1 Découverte Initiale des Voisins](#21-découverte-initiale-des-voisins)
+        - [2.2 Apprentissage des Routes](#22-apprentissage-des-routes)
+        - [2.3 État Stable Atteint](#23-état-stable-atteint)
+    - [3. Temps de Convergence - Gestion des Pannes](#3-temps-de-convergence---gestion-des-pannes)
+        - [3.1 Détection de Panne](#31-détection-de-panne)
+        - [3.2 Suppression des Routes](#32-suppression-des-routes)
+        - [3.3 Reconvergence](#33-reconvergence)
+    - [4. Performance des Oscillations (Failover)](#4-performance-des-oscillations-failover)
+        - [4.1 Analyse des Basculements](#41-analyse-des-basculements)
+        - [4.2 Impact Performance](#42-impact-performance)
+    - [5. Optimisation des Performances](#5-optimisation-des-performances)
+        - [5.1 Mécanismes d'Optimisation Implémentés](#51-mécanismes-doptimisation-implémentés)
+        - [5.2 Gestion Mémoire](#52-gestion-mémoire)
+
+---
 
 ## Vue d'ensemble
 
@@ -501,7 +587,7 @@ fn is_valid_route(&self, route: &RouteEntry) -> bool {
 }
 ```
 
-### 1.6 Mémorisation des voisins 
+### 1.6 Mémorisation des voisins
 
 #### Structure de données des voisins
 
@@ -1046,8 +1132,7 @@ pub const CLEANUP_INTERVAL: Duration = Duration::from_secs(5);    // Nettoyage f
 Avec la configuration actuelle, les temps de convergence théoriques sont :
 - **Détection de panne** : 12 secondes maximum (3 × HELLO_INTERVAL)
 - **Propagation d'une nouvelle route** : 8-16 secondes (1-2 × UPDATE_INTERVAL)
-- **Convergence complète** : 24-32 secondes dans le pire cas
-
+- **Convergence complète** : **30 secondes** (18:56:39Z → 18:57:09Z).
 
 # Rapport de Test - Validation des Fonctionnalités
 
@@ -1072,7 +1157,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 **Validation** : Le système découvre automatiquement les voisins et maintient leur état (ALIVE/DEAD).
 
-### 1.2 Calcul et Mise à Jour des Routes 
+### 1.2 Calcul et Mise à Jour des Routes
 
 **Test** : Apprentissage et mise à jour des routes vers les réseaux distants.
 
@@ -1085,7 +1170,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 **Validation** : Les routes sont calculées avec métrique appropriée (hop count + 1) et ajoutées à la table système.
 
-### 1.3 Mécanisme de Failover 
+### 1.3 Mécanisme de Failover
 
 **Test** : Basculement automatique entre chemins de même métrique.
 
@@ -1097,7 +1182,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 **Validation** : Le système alterne automatiquement entre R2 et R4 pour la route 10.2.0.0/24, démontrant un failover fonctionnel.
 
-### 1.4 Interface de Contrôle 
+### 1.4 Interface de Contrôle
 
 **Test** : Commandes de gestion via l'interface JSON.
 
@@ -1113,9 +1198,9 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 {"success":true,"message":"Protocol started successfully"}
 ```
 
-**Validation** : 
+**Validation** : L'interface de contrôle JSON fonctionne correctement avec les commandes de base.
 
-### 1.5 Requêtes Inter-Routeurs 
+### 1.5 Requêtes Inter-Routeurs
 
 **Test** : Interrogation des voisins d'un routeur distant.
 
@@ -1126,11 +1211,11 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 [18:58:04Z] Successfully delivered neighbor information for router R2
 ```
 
-**Validation** Le système peut interroger les voisins d'autres routeurs avec succès.
+**Validation** : Le système peut interroger les voisins d'autres routeurs avec succès.
 
 ## 2. Validation de la Tolérance aux Pannes
 
-### 2.1 Détection de Voisin Mort 
+### 2.1 Détection de Voisin Mort
 
 **Test** : Simulation de panne du routeur R2.
 
@@ -1157,7 +1242,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 **Validation** : Les routes via le voisin mort sont automatiquement supprimées du système.
 
-### 2.3 Recovery Automatique 
+### 2.3 Recovery Automatique
 
 **Test** : Redémarrage du protocole et reconnexion.
 
@@ -1173,7 +1258,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 ## 3. Validation de l'Intégration Système
 
-### 3.1 Modification Table de Routage 
+### 3.1 Modification Table de Routage
 
 **Test** : Injection des routes dans la table système via net-route.
 
@@ -1201,7 +1286,7 @@ Les fichiers de log utilisés pour la validation peuvent etre trouvés dans le r
 
 ## 4. Tests de Performance
 
-### 4.1 État Final du Système 
+### 4.1 État Final du Système
 
 **Résultat Final (DEBUG STATUS)** :
 ```
