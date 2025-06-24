@@ -59,11 +59,11 @@ pub struct SimpleRoutingProtocol {
 
 impl SimpleRoutingProtocol {
     // Constants for timeouts
-    const NEIGHBOR_TIMEOUT: Duration = Duration::from_secs(35); // 3.5 * hello interval
-    const ROUTE_TIMEOUT: Duration = Duration::from_secs(65);    // 3.25 * update interval
-    const HELLO_INTERVAL: Duration = Duration::from_secs(10);
-    const UPDATE_INTERVAL: Duration = Duration::from_secs(20);
-    const CLEANUP_INTERVAL: Duration = Duration::from_secs(15);
+    const NEIGHBOR_TIMEOUT: Duration = Duration::from_secs(12); // 3 * hello interval
+    const ROUTE_TIMEOUT: Duration = Duration::from_secs(16);    // 2 * update interval  
+    const HELLO_INTERVAL: Duration = Duration::from_secs(4);    // Fast neighbor detection
+    const UPDATE_INTERVAL: Duration = Duration::from_secs(8);   // Quick route convergence
+    const CLEANUP_INTERVAL: Duration = Duration::from_secs(5);  // Frequent cleanup
 
     pub async fn new(
         router_id: String,
@@ -188,13 +188,13 @@ impl SimpleRoutingProtocol {
                 for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
                     if now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT {
                         if neighbor_info.is_alive {
-                            warn!("🔴 Neighbor {} is now considered DEAD (last seen: {:?} ago)", 
+                            warn!("X Neighbor {} is now considered DEAD (last seen: {:?} ago)", 
                                   neighbor_id, now.duration_since(neighbor_info.last_seen));
                             neighbor_info.is_alive = false;
                             dead_neighbors.push(neighbor_id.clone());
                         }
                     } else if !neighbor_info.is_alive {
-                        info!("🟢 Neighbor {} is now ALIVE again", neighbor_id);
+                        info!("O Neighbor {} is now ALIVE again", neighbor_id);
                         neighbor_info.is_alive = true;
                     }
                 }
@@ -205,7 +205,7 @@ impl SimpleRoutingProtocol {
                 let route_states_guard = route_states.lock().await;
                 for (destination, route_state) in route_states_guard.iter() {
                     if now.duration_since(route_state.last_advertised) > Self::ROUTE_TIMEOUT {
-                        warn!("📋 Route to {} is stale (last advertised: {:?} ago)", 
+                        warn!("Route to {} is stale (last advertised: {:?} ago)", 
                               destination, now.duration_since(route_state.last_advertised));
                         stale_routes.push(destination.clone());
                     }
@@ -222,19 +222,19 @@ impl SimpleRoutingProtocol {
                         // Remove routes from dead neighbors
                         if dead_neighbors.contains(&route_state.advertising_neighbor) {
                             routes_to_remove.insert(destination.clone());
-                            info!("🗑️  Marking route to {} for removal (dead neighbor: {})", 
+                            info!("Marking route to {} for removal (dead neighbor: {})", 
                                   destination, route_state.advertising_neighbor);
                         }
                         // Remove stale routes
                         if stale_routes.contains(destination) {
                             routes_to_remove.insert(destination.clone());
-                            info!("🗑️  Marking route to {} for removal (stale route)", destination);
+                            info!("Marking route to {} for removal (stale route)", destination);
                         }
                     }
                 }
 
                 if !routes_to_remove.is_empty() {
-                    info!("🧹 Cleaning up {} stale/dead routes", routes_to_remove.len());
+                    info!("Cleaning up {} stale/dead routes", routes_to_remove.len());
                     self.remove_routes(routes_to_remove).await?;
                 }
             }
@@ -242,11 +242,11 @@ impl SimpleRoutingProtocol {
             // Also remove routes directly from routing table by dead neighbor IP
             for dead_neighbor_id in &dead_neighbors {
                 if let Some(dead_neighbor_ip) = self.get_neighbor_ip(dead_neighbor_id).await {
-                    info!("🔴 Removing routes via dead neighbor IP: {}", dead_neighbor_ip);
+                    info!("X Removing routes via dead neighbor IP: {}", dead_neighbor_ip);
                     let mut router_guard = router.lock().await;
                     let removed_routes = router_guard.routing_table.remove_routes_via_nexthop(dead_neighbor_ip).await?;
                     if !removed_routes.is_empty() {
-                        info!("✅ Successfully removed {} routes via dead neighbor {}", 
+                        info!("V Successfully removed {} routes via dead neighbor {}", 
                               removed_routes.len(), dead_neighbor_ip);
                     }
                     drop(router_guard);
@@ -259,7 +259,7 @@ impl SimpleRoutingProtocol {
                 neighbors_guard.retain(|neighbor_id, neighbor_info| {
                     if !neighbor_info.is_alive &&
                         now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT * 2 {
-                        info!("🗑️  Removing dead neighbor {} from neighbor table", neighbor_id);
+                        info!("Removing dead neighbor {} from neighbor table", neighbor_id);
                         false
                     } else {
                         true
@@ -289,14 +289,14 @@ impl SimpleRoutingProtocol {
 
         for destination in destinations {
             if let Some(route_state) = route_states_guard.remove(&destination) {
-                info!("🗑️  Removing route to {} (was via {})", 
+                info!("Removing route to {} (was via {})", 
                       destination, route_state.advertising_neighbor);
 
                 // Remove from system routing table
                 if let Err(e) = router_guard.routing_table.remove_route(&route_state.route).await {
                     warn!("Failed to remove route to {}: {}", destination, e);
                 } else {
-                    info!("✅ Successfully removed route to {} from system", destination);
+                    info!("V Successfully removed route to {} from system", destination);
                 }
             }
         }

@@ -65,7 +65,7 @@ impl Router {
                 // For equal metrics, force replacement to enable failover
                 if let Some(existing) = self.routing_table.find_route(&route.destination) {
                     if existing.metric == route.metric && existing.next_hop != route.next_hop {
-                        info!("🔄 Replacing route to {} (failover from {} to {})", 
+                        info!("Replacing route to {} (failover from {} to {})",
                               route.destination, existing.next_hop, route.next_hop);
                         self.routing_table.replace_route(route).await?;
                     } else {
@@ -84,7 +84,7 @@ impl Router {
 
     // New method to handle dead neighbors
     pub async fn handle_dead_neighbor(&mut self, neighbor_ip: Ipv4Addr) -> Result<(), Box<dyn std::error::Error>> {
-        info!("🔴 Handling dead neighbor: {}", neighbor_ip);
+        info!("Handling dead neighbor: {}", neighbor_ip);
 
         // Remove all routes that go through this neighbor
         let removed_routes = self.routing_table.remove_routes_via_nexthop(neighbor_ip).await?;
@@ -94,7 +94,7 @@ impl Router {
 
             // Log what routes were affected
             for route in &removed_routes {
-                info!("  🗑️  Removed route to {} (was via {})", route.destination, neighbor_ip);
+                info!("Removed route to {} (was via {})", route.destination, neighbor_ip);
             }
         }
 
