@@ -12,7 +12,7 @@ cargo build --release
 cargo install --path .
 ```
 
-## 🚦 Utilisation
+## Utilisation
 
 ### Démarrage du Protocole
 
