@@ -69,23 +69,31 @@ impl RoutingTable {
         // Check if route already exists
         if let Some(existing_index) = self.find_route_index(&route.destination) {
             let existing_route = &self.routes[existing_index];
-            if route.metric < existing_route.metric {
-                info!("Updating route to {} (old metric: {}, new metric: {})",
-                      route.destination, existing_route.metric, route.metric);
 
-                // Delete old route
-                self.delete_system_route(existing_route).await?;
+            // Only update if the new route has a better (lower) metric
+            // OR if it's from the same source with a different path (route update)
+            if route.metric < existing_route.metric ||
+                (route.source == existing_route.source && route.next_hop != existing_route.next_hop) {
+
+                info!("Updating route to {} (old metric: {}, new metric: {}, old nexthop: {}, new nexthop: {})",
+                      route.destination, existing_route.metric, route.metric, 
+                      existing_route.next_hop, route.next_hop);
+
+                // Delete old route from system
+                if existing_route.source != RouteSource::Direct {
+                    self.delete_system_route(existing_route).await?;
+                }
 
                 // Update in our table
                 self.routes[existing_index] = route.clone();
 
-                // Add new route
+                // Add new route to system
                 if route.source != RouteSource::Direct {
                     self.add_system_route(&route).await?;
                 }
             } else {
-                debug!("Keeping existing route with better metric");
-                return Ok(());
+                debug!("Keeping existing route with better or equal metric ({} vs {})", 
+                       existing_route.metric, route.metric);
             }
         } else {
             info!("Adding new route to {} via {} metric {}",
@@ -103,16 +111,98 @@ impl RoutingTable {
         Ok(())
     }
 
+    // Method to remove a specific route
+    pub async fn remove_route(&mut self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(index) = self.find_route_index(&route.destination) {
+            let existing_route = &self.routes[index];
+
+            info!("Removing route to {} via {} (source: {:?})", 
+                  existing_route.destination, existing_route.next_hop, existing_route.source);
+
+            // Delete from system routing table if it's not a direct route
+            if existing_route.source != RouteSource::Direct {
+                self.delete_system_route(existing_route).await?;
+            }
+
+            // Remove from our internal table
+            self.routes.remove(index);
+
+            info!("✓ Successfully removed route to {}", route.destination);
+        } else {
+            debug!("Route to {} not found for removal", route.destination);
+        }
+
+        Ok(())
+    }
+
+    // Method to remove routes by next hop (useful when neighbor dies)
+    pub async fn remove_routes_via_nexthop(&mut self, next_hop: Ipv4Addr) -> Result<Vec<RouteEntry>, Box<dyn std::error::Error>> {
+        let mut removed_routes = Vec::new();
+        let mut indices_to_remove = Vec::new();
+
+        // Find all routes using this next hop
+        for (index, route) in self.routes.iter().enumerate() {
+            if route.next_hop == next_hop && route.source == RouteSource::Protocol {
+                indices_to_remove.push(index);
+            }
+        }
+
+        // Remove routes in reverse order to maintain correct indices
+        for &index in indices_to_remove.iter().rev() {
+            let route = self.routes.remove(index);
+
+            info!("Removing route to {} via dead neighbor {}", route.destination, next_hop);
+
+            // Delete from system routing table
+            self.delete_system_route(&route).await?;
+            removed_routes.push(route);
+        }
+
+        if !removed_routes.is_empty() {
+            info!("✓ Removed {} routes via dead neighbor {}", removed_routes.len(), next_hop);
+        }
+
+        Ok(removed_routes)
+    }
+
+    // Enhanced method to check for better routes (now considers route age)
     pub fn has_better_route(&self, route: &RouteEntry) -> bool {
         if let Some(existing_route) = self.find_route(&route.destination) {
+            // Consider existing route better if it has lower or equal metric
+            // This prevents route flapping
             existing_route.metric <= route.metric
         } else {
             false
         }
     }
 
+    // Method to find alternative routes when a route fails
+    pub fn find_alternative_route(&self, destination: &Ipv4Network, failed_nexthop: Ipv4Addr) -> Option<&RouteEntry> {
+        self.routes.iter()
+            .filter(|route| route.destination == *destination && route.next_hop != failed_nexthop)
+            .min_by_key(|route| route.metric)
+    }
+
     pub fn get_routes(&self) -> &[RouteEntry] {
         &self.routes
+    }
+
+    // Enhanced route lookup with longest prefix match
+    pub fn lookup_route(&self, destination: Ipv4Addr) -> Option<&RouteEntry> {
+        let mut best_match: Option<&RouteEntry> = None;
+        let mut best_prefix_len = 0;
+
+        for route in &self.routes {
+            if route.destination.contains(destination) {
+                let prefix_len = route.destination.prefix();
+                if prefix_len > best_prefix_len {
+                    best_match = Some(route);
+                    best_prefix_len = prefix_len;
+                }
+            }
+        }
+
+        best_match
     }
 
     fn find_route(&self, destination: &Ipv4Network) -> Option<&RouteEntry> {
@@ -135,7 +225,7 @@ impl RoutingTable {
             return false;
         }
 
-        // Allow unspecified for direct routes
+        // Allow unspecified for direct routes only
         if route.next_hop.is_unspecified() && route.source != RouteSource::Direct {
             debug!("Invalid gateway (unspecified for non-direct route): {}", route.next_hop);
             return false;
@@ -151,18 +241,20 @@ impl RoutingTable {
         }
 
         // Check if gateway is reachable (in one of our local networks)
-        let mut gateway_is_local = false;
-        for local_net in &self.local_networks {
-            if local_net.contains(route.next_hop) {
-                debug!("Gateway {} found in local network {}", route.next_hop, local_net);
-                gateway_is_local = true;
-                break;
+        if !route.next_hop.is_unspecified() {
+            let mut gateway_is_local = false;
+            for local_net in &self.local_networks {
+                if local_net.contains(route.next_hop) {
+                    debug!("Gateway {} found in local network {}", route.next_hop, local_net);
+                    gateway_is_local = true;
+                    break;
+                }
             }
-        }
 
-        if !gateway_is_local {
-            debug!("Gateway {} is not in any local network", route.next_hop);
-            return false;
+            if !gateway_is_local {
+                debug!("Gateway {} is not in any local network", route.next_hop);
+                return false;
+            }
         }
 
         true
@@ -172,7 +264,6 @@ impl RoutingTable {
         info!("Adding route via net-route: {} via {} metric {}",
               route.destination, route.next_hop, route.metric);
 
-        // Create the route with proper network address (not host address)
         let destination_network = route.destination.network();
         let prefix_len = route.destination.prefix();
 
@@ -212,7 +303,7 @@ impl RoutingTable {
     }
 
     async fn delete_system_route(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        info!("Deleting route: {}", route.destination);
+        info!("Deleting route: {} via {}", route.destination, route.next_hop);
 
         let net_route = net_route::Route::new(
             IpAddr::V4(route.destination.network()),
@@ -249,6 +340,52 @@ impl RoutingTable {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             debug!("ip route del failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    // Method to get routing table statistics
+    pub fn get_stats(&self) -> (usize, usize, usize) {
+        let direct_routes = self.routes.iter().filter(|r| r.source == RouteSource::Direct).count();
+        let protocol_routes = self.routes.iter().filter(|r| r.source == RouteSource::Protocol).count();
+        let static_routes = self.routes.iter().filter(|r| r.source == RouteSource::Static).count();
+
+        (direct_routes, protocol_routes, static_routes)
+    }
+
+    // Method to check if destination is directly connected
+    pub fn is_directly_connected(&self, destination: &Ipv4Network) -> bool {
+        self.routes.iter().any(|route| {
+            route.destination == *destination && route.source == RouteSource::Direct
+        })
+    }
+
+    // Method to get all routes to a specific destination
+    pub fn get_routes_to_destination(&self, destination: &Ipv4Network) -> Vec<&RouteEntry> {
+        self.routes.iter()
+            .filter(|route| route.destination == *destination)
+            .collect()
+    }
+
+    // Method to clear all protocol routes (useful for protocol restart)
+    pub async fn clear_protocol_routes(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut indices_to_remove = Vec::new();
+
+        for (index, route) in self.routes.iter().enumerate() {
+            if route.source == RouteSource::Protocol {
+                indices_to_remove.push(index);
+            }
+        }
+
+        for &index in indices_to_remove.iter().rev() {
+            let route = self.routes.remove(index);
+            self.delete_system_route(&route).await?;
+            info!("Cleared protocol route to {}", route.destination);
+        }
+
+        if !indices_to_remove.is_empty() {
+            info!("✓ Cleared {} protocol routes", indices_to_remove.len());
         }
 
         Ok(())
