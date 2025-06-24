@@ -1,3 +1,5 @@
+> **Luca Ceccarelli** - luca.ceccarelli@etu.mines-ales.fr
+
 # Rapport Fonctionnel 
 
 ## Vue d'ensemble
