@@ -197,35 +197,10 @@ impl RoutingTable {
         Ok(())
     }
 
-    // Method to find alternative routes when a route fails
-    pub fn find_alternative_route(&self, destination: &Ipv4Network, failed_nexthop: Ipv4Addr) -> Option<&RouteEntry> {
-        self.routes.iter()
-            .filter(|route| route.destination == *destination && route.next_hop != failed_nexthop)
-            .min_by_key(|route| route.metric)
-    }
-
     pub fn get_routes(&self) -> &[RouteEntry] {
         &self.routes
     }
-
-    // Enhanced route lookup with longest prefix match
-    pub fn lookup_route(&self, destination: Ipv4Addr) -> Option<&RouteEntry> {
-        let mut best_match: Option<&RouteEntry> = None;
-        let mut best_prefix_len = 0;
-
-        for route in &self.routes {
-            if route.destination.contains(destination) {
-                let prefix_len = route.destination.prefix();
-                if prefix_len > best_prefix_len {
-                    best_match = Some(route);
-                    best_prefix_len = prefix_len;
-                }
-            }
-        }
-
-        best_match
-    }
-
+    
     fn find_route_internal(&self, destination: &Ipv4Network) -> Option<&RouteEntry> {
         self.routes.iter().find(|route| route.destination == *destination)
     }
@@ -366,52 +341,6 @@ impl RoutingTable {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             debug!("ip route del failed: {}", stderr);
-        }
-
-        Ok(())
-    }
-
-    // Method to get routing table statistics
-    pub fn get_stats(&self) -> (usize, usize, usize) {
-        let direct_routes = self.routes.iter().filter(|r| r.source == RouteSource::Direct).count();
-        let protocol_routes = self.routes.iter().filter(|r| r.source == RouteSource::Protocol).count();
-        let static_routes = self.routes.iter().filter(|r| r.source == RouteSource::Static).count();
-
-        (direct_routes, protocol_routes, static_routes)
-    }
-
-    // Method to check if destination is directly connected
-    pub fn is_directly_connected(&self, destination: &Ipv4Network) -> bool {
-        self.routes.iter().any(|route| {
-            route.destination == *destination && route.source == RouteSource::Direct
-        })
-    }
-
-    // Method to get all routes to a specific destination
-    pub fn get_routes_to_destination(&self, destination: &Ipv4Network) -> Vec<&RouteEntry> {
-        self.routes.iter()
-            .filter(|route| route.destination == *destination)
-            .collect()
-    }
-
-    // Method to clear all protocol routes (useful for protocol restart)
-    pub async fn clear_protocol_routes(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut indices_to_remove = Vec::new();
-
-        for (index, route) in self.routes.iter().enumerate() {
-            if route.source == RouteSource::Protocol {
-                indices_to_remove.push(index);
-            }
-        }
-
-        for &index in indices_to_remove.iter().rev() {
-            let route = self.routes.remove(index);
-            self.delete_system_route(&route).await?;
-            info!("Cleared protocol route to {}", route.destination);
-        }
-
-        if !indices_to_remove.is_empty() {
-            info!("✓ Cleared {} protocol routes", indices_to_remove.len());
         }
 
         Ok(())

@@ -1,5 +1,5 @@
 use super::types::*;
-use super::{message_handler, neighbor_manager, route_manager};
+use super::{neighbor_manager, route_manager};
 use super::SimpleRoutingProtocol;
 use crate::router::Router;
 use log::{info, warn, error, debug};

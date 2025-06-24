@@ -1,4 +1,3 @@
-mod message_handler;
 mod neighbor_manager;
 mod route_manager;
 mod task_manager;
@@ -178,45 +177,7 @@ impl SimpleRoutingProtocol {
             })
         }).collect()
     }
-
-    // Legacy start method
-    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("=== Starting routing protocol ===");
-        self.print_initial_state().await;
-        task_manager::start_tasks(self).await
-    }
-
-    async fn print_initial_state(&self) {
-        let router_guard = self.router.lock().await;
-        info!("=== Initial Router State ===");
-        info!("Router ID: {}", router_guard.id);
-        info!("Interfaces:");
-        for (name, interface) in &router_guard.interfaces {
-            info!("  {} -> {} ({})", name, interface.ip, interface.network);
-        }
-        info!("Initial routing table:");
-        for route in router_guard.routing_table.get_routes() {
-            let next_hop_str = if route.next_hop.is_unspecified() {
-                "direct".to_string()
-            } else {
-                route.next_hop.to_string()
-            };
-
-            info!("  {} via {} dev {} metric {} ({:?})",
-                  route.destination,
-                  next_hop_str,
-                  route.interface,
-                  route.metric,
-                  route.source);
-        }
-        info!("=============================");
-    }
-
-    // Neighbor request functionality
-    pub async fn request_neighbors_from_router(&self, target_router_id: &str) -> Option<Vec<crate::control_server::NeighborInfo>> {
-        neighbor_manager::request_neighbors_from_router(self, target_router_id).await
-    }
-
+    
     // Internal accessor methods for other modules
     pub fn get_router(&self) -> &Arc<Mutex<Router>> {
         &self.router
