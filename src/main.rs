@@ -1,18 +1,20 @@
 use clap::{Arg, Command};
-use log::info; // Enlever debug si pas utilisé
+use log::{info, error};
 use std::collections::HashSet;
+use std::sync::Arc;
 
+mod control_server;
 mod network;
 mod protocol;
 mod router;
 mod routing_table;
 
+use control_server::ControlServer;
 use network::Network;
 use protocol::SimpleRoutingProtocol;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configuration des logs plus détaillée
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Debug)
         .init();
@@ -42,6 +44,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_value("5555"),
         )
         .arg(
+            Arg::new("control-port")
+                .long("control-port")
+                .value_name("PORT")
+                .help("Port for control server")
+                .default_value("8080"),
+        )
+        .arg(
             Arg::new("debug")
                 .long("debug")
                 .help("Show routing table every 30 seconds")
@@ -62,16 +71,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .expect("Invalid port number");
 
+    let control_port: u16 = matches
+        .get_one::<String>("control-port")
+        .unwrap()
+        .parse()
+        .expect("Invalid control port number");
+
     let debug_mode = matches.get_flag("debug");
 
     info!("=== Starting Router {} ===", sysname);
     info!("Interfaces: {:?}", interfaces);
     info!("Listen port: {}", port);
+    info!("Control port: {}", control_port);
     info!("Debug mode: {}", debug_mode);
 
-    // Créer le réseau et le protocole de routage
+    // Create the network and the routing protocol
     let network = Network::new();
-    let mut protocol = SimpleRoutingProtocol::new(
+    let protocol = SimpleRoutingProtocol::new(
         sysname,
         interfaces.into_iter().collect::<HashSet<_>>(),
         port,
@@ -79,8 +95,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         debug_mode,
     ).await?;
 
-    // Démarrer le protocole
-    protocol.start().await?;
+    // Create control server and set protocol
+    let control_server = Arc::new(ControlServer::new(control_port));
+    control_server.set_protocol(protocol).await;
+
+    info!("=== Control Server Commands ===");
+    info!("Connect with: telnet 127.0.0.1 {}", control_port);
+    info!("Available commands:");
+    info!("  {{\"command\": \"status\"}}");
+    info!("  {{\"command\": \"neighbors\"}}");
+    info!("  {{\"command\": \"neighbors_of\", \"args\": \"ROUTER_ID\"}}");
+    info!("  {{\"command\": \"routing_table\"}}");
+    info!("  {{\"command\": \"start\"}}");
+    info!("  {{\"command\": \"stop\"}}");
+    info!("  {{\"command\": \"help\"}}");
+    info!("===============================");
+
+    // Start control server task
+    let control_server_clone = control_server.clone();
+    let control_task = tokio::spawn(async move {
+        if let Err(e) = control_server_clone.start().await {
+            error!("Control server error: {}", e);
+        }
+    });
+
+    // Start protocol automatically
+    {
+        let protocol_guard = control_server.protocol.lock().await;
+        if let Some(protocol_ref) = protocol_guard.as_ref() {
+            if let Err(e) = protocol_ref.start_tasks().await {
+                error!("Failed to start protocol tasks: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    info!("Protocol and control server started successfully");
+
+    // Wait for control server
+    control_task.await?;
 
     Ok(())
 }
