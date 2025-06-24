@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
 use tokio::time::interval;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast;
@@ -32,6 +32,36 @@ pub struct RouteInfo {
 pub struct HelloMessage {
     pub router_id: String,
     pub interfaces: HashMap<String, String>,
+}
+
+// New message types for neighbor requests
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NeighborRequest {
+    pub requesting_router_id: String,
+    pub request_id: String,
+    pub target_router_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NeighborResponse {
+    pub responding_router_id: String,
+    pub request_id: String,
+    pub neighbors: Vec<NeighborResponseInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NeighborResponseInfo {
+    pub router_id: String,
+    pub ip_address: String,
+    pub last_seen: String,
+    pub is_alive: bool,
+    pub interfaces: Vec<String>,
+}
+
+#[derive(Debug)]
+pub struct PendingNeighborRequest {
+    pub responder: oneshot::Sender<Vec<crate::control_server::NeighborInfo>>,
+    pub timestamp: SystemTime,
 }
 
 #[derive(Debug, Clone)]
@@ -61,15 +91,16 @@ pub struct SimpleRoutingProtocol {
     is_running: Arc<AtomicBool>,
     shutdown_tx: Arc<Mutex<Option<broadcast::Sender<()>>>>,
     task_handles: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+    pending_neighbor_requests: Arc<Mutex<HashMap<String, PendingNeighborRequest>>>,
 }
 
 impl SimpleRoutingProtocol {
     // Constants for timeouts
-    const NEIGHBOR_TIMEOUT: Duration = Duration::from_secs(12); // 3 * hello interval
-    const ROUTE_TIMEOUT: Duration = Duration::from_secs(16);    // 2 * update interval
-    const HELLO_INTERVAL: Duration = Duration::from_secs(4);    // Fast neighbor detection
-    const UPDATE_INTERVAL: Duration = Duration::from_secs(8);   // Quick route convergence
-    const CLEANUP_INTERVAL: Duration = Duration::from_secs(5);  // Frequent cleanup
+    const NEIGHBOR_TIMEOUT: Duration = Duration::from_secs(12);
+    const ROUTE_TIMEOUT: Duration = Duration::from_secs(16);
+    const HELLO_INTERVAL: Duration = Duration::from_secs(4);
+    const UPDATE_INTERVAL: Duration = Duration::from_secs(8);
+    const CLEANUP_INTERVAL: Duration = Duration::from_secs(5);
 
     pub async fn new(
         router_id: String,
@@ -123,7 +154,86 @@ impl SimpleRoutingProtocol {
             is_running: Arc::new(AtomicBool::new(false)),
             shutdown_tx: Arc::new(Mutex::new(None)),
             task_handles: Arc::new(Mutex::new(Vec::new())),
+            pending_neighbor_requests: Arc::new(Mutex::new(HashMap::new())),
         })
+    }
+
+    // Add this new method to request neighbors from a specific router
+    pub async fn request_neighbors_from_router(&self, target_router_id: &str) -> Option<Vec<crate::control_server::NeighborInfo>> {
+        // Generate a unique request ID
+        let request_id = format!("{}_{}",
+                                 SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis(),
+                                 std::ptr::addr_of!(*self) as usize // Use pointer address for uniqueness
+        );
+
+        let router_guard = self.router.lock().await;
+        let our_router_id = router_guard.id.clone();
+        drop(router_guard);
+
+        // Create the neighbor request
+        let neighbor_request = NeighborRequest {
+            requesting_router_id: our_router_id,
+            request_id: request_id.clone(),
+            target_router_id: target_router_id.to_string(),
+        };
+
+        // Create a channel to receive the response
+        let (tx, rx) = oneshot::channel();
+
+        // Store the pending request
+        {
+            let mut pending_requests = self.pending_neighbor_requests.lock().await;
+            pending_requests.insert(request_id.clone(), PendingNeighborRequest {
+                responder: tx,
+                timestamp: SystemTime::now(),
+            });
+        }
+
+        info!("→ Requesting neighbors from router {} (request_id: {})", target_router_id, request_id);
+
+        // Send the request as a broadcast
+        if let Ok(message) = serde_json::to_string(&neighbor_request) {
+            let request_packet = format!("NEIGHBOR_REQUEST:{}", message);
+
+            if let Some(socket) = self.sockets.first() {
+                let router_guard = self.router.lock().await;
+                for (_, interface) in &router_guard.interfaces {
+                    let broadcast_addr = interface.network.broadcast();
+                    let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
+
+                    if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
+                        if let Err(e) = socket.send_to(request_packet.as_bytes(), target_addr).await {
+                            warn!("Failed to send neighbor request to {}: {}", target_addr, e);
+                        } else {
+                            debug!("✓ Sent NEIGHBOR_REQUEST to {} for router {}", target_addr, target_router_id);
+                        }
+                    }
+                }
+                drop(router_guard);
+            }
+        }
+
+        // Wait for response with timeout
+        match tokio::time::timeout(Duration::from_secs(5), rx).await {
+            Ok(Ok(neighbors)) => {
+                info!("✓ Received neighbor information for router {} ({} neighbors)", target_router_id, neighbors.len());
+                Some(neighbors)
+            }
+            Ok(Err(_)) => {
+                warn!("Channel closed while waiting for neighbor response from {}", target_router_id);
+                // Clean up the pending request
+                let mut pending_requests = self.pending_neighbor_requests.lock().await;
+                pending_requests.remove(&request_id);
+                None
+            }
+            Err(_) => {
+                warn!("Timeout waiting for neighbor response from router {}", target_router_id);
+                // Clean up the pending request
+                let mut pending_requests = self.pending_neighbor_requests.lock().await;
+                pending_requests.remove(&request_id);
+                None
+            }
+        }
     }
 
     pub async fn get_status(&self) -> (String, bool) {
@@ -158,28 +268,55 @@ impl SimpleRoutingProtocol {
         neighbor_list
     }
 
+    // Updated get_neighbors_of method
     pub async fn get_neighbors_of(&self, router_id: &str) -> Option<Vec<crate::control_server::NeighborInfo>> {
-        // For now, we can only return neighbors of our own router
-        // In a full implementation, you'd need to track neighbors of neighbors
         let router_guard = self.router.lock().await;
-        if router_guard.id == router_id {
-            drop(router_guard);
+        let our_router_id = router_guard.id.clone();
+        drop(router_guard);
+
+        if router_id == our_router_id {
+            // Return our own neighbors
             Some(self.get_neighbors().await)
         } else {
-            // Could be extended to track neighbor topology
-            None
+            // Request neighbors from the specified router
+            self.request_neighbors_from_router(router_id).await
         }
+    }
+
+    // Helper method to get current neighbors in response format
+    async fn get_current_neighbors_static(
+        neighbors: &Arc<Mutex<HashMap<String, NeighborInfo>>>,
+    ) -> Vec<NeighborResponseInfo> {
+        let neighbors_guard = neighbors.lock().await;
+        let mut neighbor_list = Vec::new();
+
+        for (router_id, neighbor_info) in neighbors_guard.iter() {
+            let last_seen = format!("{:?} ago", neighbor_info.last_seen.elapsed());
+            let interfaces: Vec<String> = neighbor_info.router_info.interfaces
+                .values()
+                .map(|iface| iface.ip.to_string())
+                .collect();
+
+            neighbor_list.push(NeighborResponseInfo {
+                router_id: router_id.clone(),
+                ip_address: neighbor_info.socket_addr.ip().to_string(),
+                last_seen,
+                is_alive: neighbor_info.is_alive,
+                interfaces,
+            });
+        }
+
+        neighbor_list
     }
 
     pub async fn start_protocol(&self) -> Result<(), Box<dyn std::error::Error>> {
         if self.is_running.load(Ordering::Relaxed) {
-            return Ok(()); // Already running
+            return Ok(());
         }
 
         info!("Starting routing protocol...");
         self.is_running.store(true, Ordering::Relaxed);
 
-        // Create shutdown channel
         let (shutdown_tx, _) = broadcast::channel(1);
         {
             let mut tx_guard = self.shutdown_tx.lock().await;
@@ -193,13 +330,12 @@ impl SimpleRoutingProtocol {
 
     pub async fn stop_protocol(&self) -> Result<(), Box<dyn std::error::Error>> {
         if !self.is_running.load(Ordering::Relaxed) {
-            return Ok(()); // Already stopped
+            return Ok(());
         }
 
         info!("Stopping routing protocol...");
         self.is_running.store(false, Ordering::Relaxed);
 
-        // Send shutdown signal
         {
             let tx_guard = self.shutdown_tx.lock().await;
             if let Some(ref tx) = *tx_guard {
@@ -207,7 +343,6 @@ impl SimpleRoutingProtocol {
             }
         }
 
-        // Wait for tasks to complete
         {
             let mut handles_guard = self.task_handles.lock().await;
             for handle in handles_guard.drain(..) {
@@ -226,12 +361,10 @@ impl SimpleRoutingProtocol {
 
         let mut handles_guard = self.task_handles.lock().await;
 
-        // Clear old handles
         for handle in handles_guard.drain(..) {
             handle.abort();
         }
 
-        // Create shutdown receiver for each task
         let shutdown_rx = {
             let tx_guard = self.shutdown_tx.lock().await;
             if let Some(ref tx) = *tx_guard {
@@ -270,7 +403,7 @@ impl SimpleRoutingProtocol {
             })
         };
 
-        // Start listen task
+        // Start listen task with additional parameters for neighbor requests
         let listen_handle = {
             let router = self.router.clone();
             let neighbors = self.neighbors.clone();
@@ -278,10 +411,12 @@ impl SimpleRoutingProtocol {
             let sockets = self.sockets.clone();
             let our_ips = self.our_ips.clone();
             let is_running = self.is_running.clone();
+            let pending_neighbor_requests = self.pending_neighbor_requests.clone();
+            let port = self.port;
             let mut shutdown_rx = shutdown_rx.resubscribe();
 
             tokio::spawn(async move {
-                Self::listen_task(router, neighbors, route_states, sockets, our_ips, is_running, &mut shutdown_rx).await;
+                Self::listen_task(router, neighbors, route_states, sockets, our_ips, is_running, pending_neighbor_requests, port, &mut shutdown_rx).await;
             })
         };
 
@@ -295,6 +430,17 @@ impl SimpleRoutingProtocol {
 
             tokio::spawn(async move {
                 Self::cleanup_task(neighbors, route_states, router, is_running, &mut shutdown_rx).await;
+            })
+        };
+
+        // Start pending requests cleanup task
+        let pending_cleanup_handle = {
+            let pending_neighbor_requests = self.pending_neighbor_requests.clone();
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                Self::cleanup_pending_requests_task(pending_neighbor_requests, is_running, &mut shutdown_rx).await;
             })
         };
 
@@ -317,6 +463,7 @@ impl SimpleRoutingProtocol {
         handles_guard.push(update_handle);
         handles_guard.push(listen_handle);
         handles_guard.push(cleanup_handle);
+        handles_guard.push(pending_cleanup_handle);
 
         if let Some(debug_handle) = debug_handle {
             handles_guard.push(debug_handle);
@@ -345,7 +492,6 @@ impl SimpleRoutingProtocol {
         }).collect()
     }
 
-    // Modified start method - now just calls start_tasks
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         info!("=== Starting routing protocol ===");
         self.print_initial_state().await;
@@ -510,6 +656,7 @@ impl SimpleRoutingProtocol {
         }
     }
 
+    // Updated listen task to handle neighbor requests
     async fn listen_task(
         router: Arc<Mutex<Router>>,
         neighbors: Arc<Mutex<HashMap<String, NeighborInfo>>>,
@@ -517,6 +664,8 @@ impl SimpleRoutingProtocol {
         sockets: Vec<Arc<UdpSocket>>,
         our_ips: HashSet<Ipv4Addr>,
         is_running: Arc<AtomicBool>,
+        pending_neighbor_requests: Arc<Mutex<HashMap<String, PendingNeighborRequest>>>,
+        port: u16,
         shutdown_rx: &mut broadcast::Receiver<()>,
     ) {
         let mut tasks = Vec::new();
@@ -528,6 +677,8 @@ impl SimpleRoutingProtocol {
             let route_states_clone = route_states.clone();
             let our_ips_clone = our_ips.clone();
             let is_running_clone = is_running.clone();
+            let pending_neighbor_requests_clone = pending_neighbor_requests.clone();
+            let sockets_clone = sockets.clone();
             let mut shutdown_rx_clone = shutdown_rx.resubscribe();
 
             let task = tokio::spawn(async move {
@@ -556,7 +707,16 @@ impl SimpleRoutingProtocol {
                                     let data = String::from_utf8_lossy(&buffer[..len]);
                                     debug!("Socket {} received {} bytes from {}", i, len, addr);
 
-                                    if let Err(e) = Self::handle_message_static(&data, addr, &router_clone, &neighbors_clone, &route_states_clone).await {
+                                    if let Err(e) = Self::handle_message_static(
+                                        &data, 
+                                        addr, 
+                                        &router_clone, 
+                                        &neighbors_clone, 
+                                        &route_states_clone,
+                                        &pending_neighbor_requests_clone,
+                                        &sockets_clone,
+                                        port
+                                    ).await {
                                         warn!("Failed to handle message from {}: {}", addr, e);
                                     }
                                 }
@@ -596,12 +756,10 @@ impl SimpleRoutingProtocol {
                         break;
                     }
 
-                    // Cleanup logic (same as before but moved to static method)
                     let now = Instant::now();
                     let mut dead_neighbors = Vec::new();
                     let mut stale_routes = Vec::new();
 
-                    // Check for dead neighbors
                     {
                         let mut neighbors_guard = neighbors.lock().await;
                         for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
@@ -619,7 +777,6 @@ impl SimpleRoutingProtocol {
                         }
                     }
 
-                    // Check for stale routes and clean up
                     {
                         let route_states_guard = route_states.lock().await;
                         for (destination, route_state) in route_states_guard.iter() {
@@ -629,7 +786,6 @@ impl SimpleRoutingProtocol {
                         }
                     }
 
-                    // Remove stale routes and routes from dead neighbors
                     if !dead_neighbors.is_empty() || !stale_routes.is_empty() {
                         let mut routes_to_remove = HashSet::new();
 
@@ -648,7 +804,6 @@ impl SimpleRoutingProtocol {
                         }
                     }
 
-                    // Clean up dead neighbor routes by IP
                     for dead_neighbor_id in &dead_neighbors {
                         if let Some(dead_neighbor_ip) = Self::get_neighbor_ip_static(dead_neighbor_id, &neighbors).await {
                             let mut router_guard = router.lock().await;
@@ -659,6 +814,49 @@ impl SimpleRoutingProtocol {
                                 }
                             }
                             drop(router_guard);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // New cleanup task for pending neighbor requests
+    async fn cleanup_pending_requests_task(
+        pending_requests: Arc<Mutex<HashMap<String, PendingNeighborRequest>>>,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut interval = interval(Duration::from_secs(10));
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    debug!("Pending requests cleanup task shutting down");
+                    break;
+                }
+                _ = interval.tick() => {
+                    if !is_running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let now = SystemTime::now();
+                    let mut expired_requests = Vec::new();
+
+                    {
+                        let pending_requests_guard = pending_requests.lock().await;
+                        for (request_id, request) in pending_requests_guard.iter() {
+                            if now.duration_since(request.timestamp).unwrap_or(Duration::ZERO) > Duration::from_secs(30) {
+                                expired_requests.push(request_id.clone());
+                            }
+                        }
+                    }
+
+                    if !expired_requests.is_empty() {
+                        let mut pending_requests_guard = pending_requests.lock().await;
+                        for request_id in expired_requests {
+                            pending_requests_guard.remove(&request_id);
+                            debug!("Cleaned up expired neighbor request: {}", request_id);
                         }
                     }
                 }
@@ -765,7 +963,6 @@ impl SimpleRoutingProtocol {
         }
     }
 
-    // Remove old task methods and keep only the static message handling methods
     async fn get_neighbor_ip(&self, neighbor_id: &str) -> Option<Ipv4Addr> {
         Self::get_neighbor_ip_static(neighbor_id, &self.neighbors).await
     }
@@ -775,12 +972,16 @@ impl SimpleRoutingProtocol {
         Ok(())
     }
 
+    // Updated handle_message_static method to handle neighbor requests and responses
     async fn handle_message_static(
         data: &str,
         addr: SocketAddr,
         router: &Arc<Mutex<Router>>,
         neighbors: &Arc<Mutex<HashMap<String, NeighborInfo>>>,
         route_states: &Arc<Mutex<HashMap<String, RouteState>>>,
+        pending_neighbor_requests: &Arc<Mutex<HashMap<String, PendingNeighborRequest>>>,
+        sockets: &[Arc<UdpSocket>],
+        port: u16,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(hello_data) = data.strip_prefix("HELLO:") {
             let hello: HelloMessage = serde_json::from_str(hello_data)?;
@@ -840,7 +1041,6 @@ impl SimpleRoutingProtocol {
             debug!("← Received UPDATE from {} with {} routes (seq: {})",
                   update.router_id, update.routes.len(), update.sequence);
 
-            // Update neighbor's last seen time
             {
                 let mut neighbors_guard = neighbors.lock().await;
                 if let Some(neighbor_info) = neighbors_guard.get_mut(&update.router_id) {
@@ -853,6 +1053,78 @@ impl SimpleRoutingProtocol {
             }
 
             Self::process_routing_update_static(update, addr, router, route_states).await.expect("Failed to process routing update");
+
+        } else if let Some(request_data) = data.strip_prefix("NEIGHBOR_REQUEST:") {
+            let request: NeighborRequest = serde_json::from_str(request_data)?;
+
+            let router_guard = router.lock().await;
+            let our_router_id = router_guard.id.clone();
+            drop(router_guard);
+
+            // Check if this request is for us
+            if request.target_router_id == our_router_id {
+                info!("← Received NEIGHBOR_REQUEST from {} for us (request_id: {})", 
+                       request.requesting_router_id, request.request_id);
+
+                // Get our current neighbors
+                let current_neighbors = Self::get_current_neighbors_static(neighbors).await;
+
+                // Create response
+                let neighbor_response = NeighborResponse {
+                    responding_router_id: our_router_id,
+                    request_id: request.request_id,
+                    neighbors: current_neighbors,
+                };
+
+                // Send response back
+                if let Ok(response_message) = serde_json::to_string(&neighbor_response) {
+                    let response_packet = format!("NEIGHBOR_RESPONSE:{}", response_message);
+
+                    if let Some(socket) = sockets.first() {
+                        if let Err(e) = socket.send_to(response_packet.as_bytes(), addr).await {
+                            warn!("Failed to send neighbor response to {}: {}", addr, e);
+                        } else {
+                            info!("→ Sent NEIGHBOR_RESPONSE to {} with {} neighbors)", 
+                                   addr, neighbor_response.neighbors.len());
+                        }
+                    }
+                }
+            } else {
+                debug!("Received neighbor request for {} (not us: {})", request.target_router_id, our_router_id);
+            }
+
+        } else if let Some(response_data) = data.strip_prefix("NEIGHBOR_RESPONSE:") {
+            let response: NeighborResponse = serde_json::from_str(response_data)?;
+
+            info!("← Received NEIGHBOR_RESPONSE from {} with {} neighbors (request_id: {})", 
+                   response.responding_router_id, response.neighbors.len(), response.request_id);
+
+            // Check if we have a pending request for this response
+            let mut pending_requests_guard = pending_neighbor_requests.lock().await;
+            if let Some(pending_request) = pending_requests_guard.remove(&response.request_id) {
+                // Convert response format to our internal format
+                let neighbors: Vec<crate::control_server::NeighborInfo> = response.neighbors
+                    .into_iter()
+                    .map(|n| crate::control_server::NeighborInfo {
+                        router_id: n.router_id,
+                        ip_address: n.ip_address,
+                        last_seen: n.last_seen,
+                        is_alive: n.is_alive,
+                        interfaces: n.interfaces,
+                    })
+                    .collect();
+
+                // Send the response through the channel
+                if let Err(_) = pending_request.responder.send(neighbors) {
+                    warn!("Failed to send neighbor response through channel (request_id: {})", 
+                          response.request_id);
+                } else {
+                    info!("✓ Successfully delivered neighbor information for router {} (request_id: {})",
+                          response.responding_router_id, response.request_id);
+                }
+            } else {
+                debug!("Received neighbor response for unknown request_id: {}", response.request_id);
+            }
         }
 
         Ok(())
