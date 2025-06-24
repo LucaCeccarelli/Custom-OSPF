@@ -141,8 +141,7 @@ impl ControlServer {
                 message: "Status retrieved".to_string(),
                 data: Some(serde_json::json!({
                     "router_id": router_id,
-                    "is_running": is_running,
-                    "uptime": "N/A" // Could add uptime tracking
+                    "is_running": is_running
                 })),
             }
         } else {
