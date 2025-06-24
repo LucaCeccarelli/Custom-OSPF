@@ -60,9 +60,20 @@ impl Router {
 
     pub async fn update_routing_table(&mut self, new_routes: Vec<RouteEntry>) -> Result<(), Box<dyn std::error::Error>> {
         for route in new_routes {
-            // Enhanced route comparison - only add if it's actually better
+            // Enhanced route comparison - use replace_route for equal metrics to enable failover
             if !self.routing_table.has_better_route(&route) {
-                self.routing_table.add_route(route).await?;
+                // For equal metrics, force replacement to enable failover
+                if let Some(existing) = self.routing_table.find_route(&route.destination) {
+                    if existing.metric == route.metric && existing.next_hop != route.next_hop {
+                        info!("🔄 Replacing route to {} (failover from {} to {})", 
+                              route.destination, existing.next_hop, route.next_hop);
+                        self.routing_table.replace_route(route).await?;
+                    } else {
+                        self.routing_table.add_route(route).await?;
+                    }
+                } else {
+                    self.routing_table.add_route(route).await?;
+                }
             } else {
                 debug!("Skipping route to {} - existing route is better", route.destination);
             }

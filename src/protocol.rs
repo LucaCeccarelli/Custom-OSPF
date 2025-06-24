@@ -188,7 +188,7 @@ impl SimpleRoutingProtocol {
                 for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
                     if now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT {
                         if neighbor_info.is_alive {
-                            warn!("🔴 Neighbor {} is now considered DEAD (last seen: {:?} ago)",
+                            warn!("🔴 Neighbor {} is now considered DEAD (last seen: {:?} ago)", 
                                   neighbor_id, now.duration_since(neighbor_info.last_seen));
                             neighbor_info.is_alive = false;
                             dead_neighbors.push(neighbor_id.clone());
@@ -205,7 +205,7 @@ impl SimpleRoutingProtocol {
                 let route_states_guard = route_states.lock().await;
                 for (destination, route_state) in route_states_guard.iter() {
                     if now.duration_since(route_state.last_advertised) > Self::ROUTE_TIMEOUT {
-                        warn!("📋 Route to {} is stale (last advertised: {:?} ago)",
+                        warn!("📋 Route to {} is stale (last advertised: {:?} ago)", 
                               destination, now.duration_since(route_state.last_advertised));
                         stale_routes.push(destination.clone());
                     }
@@ -222,10 +222,13 @@ impl SimpleRoutingProtocol {
                         // Remove routes from dead neighbors
                         if dead_neighbors.contains(&route_state.advertising_neighbor) {
                             routes_to_remove.insert(destination.clone());
+                            info!("🗑️  Marking route to {} for removal (dead neighbor: {})", 
+                                  destination, route_state.advertising_neighbor);
                         }
                         // Remove stale routes
                         if stale_routes.contains(destination) {
                             routes_to_remove.insert(destination.clone());
+                            info!("🗑️  Marking route to {} for removal (stale route)", destination);
                         }
                     }
                 }
@@ -233,6 +236,20 @@ impl SimpleRoutingProtocol {
                 if !routes_to_remove.is_empty() {
                     info!("🧹 Cleaning up {} stale/dead routes", routes_to_remove.len());
                     self.remove_routes(routes_to_remove).await?;
+                }
+            }
+
+            // Also remove routes directly from routing table by dead neighbor IP
+            for dead_neighbor_id in &dead_neighbors {
+                if let Some(dead_neighbor_ip) = self.get_neighbor_ip(dead_neighbor_id).await {
+                    info!("🔴 Removing routes via dead neighbor IP: {}", dead_neighbor_ip);
+                    let mut router_guard = router.lock().await;
+                    let removed_routes = router_guard.routing_table.remove_routes_via_nexthop(dead_neighbor_ip).await?;
+                    if !removed_routes.is_empty() {
+                        info!("✅ Successfully removed {} routes via dead neighbor {}", 
+                              removed_routes.len(), dead_neighbor_ip);
+                    }
+                    drop(router_guard);
                 }
             }
 
@@ -252,17 +269,35 @@ impl SimpleRoutingProtocol {
         }
     }
 
+    // Helper method to get neighbor IP from neighbor ID
+    async fn get_neighbor_ip(&self, neighbor_id: &str) -> Option<Ipv4Addr> {
+        let neighbors_guard = self.neighbors.lock().await;
+        if let Some(neighbor_info) = neighbors_guard.get(neighbor_id) {
+            if let std::net::IpAddr::V4(ipv4) = neighbor_info.socket_addr.ip() {
+                Some(ipv4)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     async fn remove_routes(&self, destinations: HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
         let mut router_guard = self.router.lock().await;
         let mut route_states_guard = self.route_states.lock().await;
 
         for destination in destinations {
             if let Some(route_state) = route_states_guard.remove(&destination) {
-                info!("🗑️  Removing route to {} (was via {})",
+                info!("🗑️  Removing route to {} (was via {})", 
                       destination, route_state.advertising_neighbor);
 
                 // Remove from system routing table
-                router_guard.routing_table.remove_route(&route_state.route).await?;
+                if let Err(e) = router_guard.routing_table.remove_route(&route_state.route).await {
+                    warn!("Failed to remove route to {}: {}", destination, e);
+                } else {
+                    info!("✅ Successfully removed route to {} from system", destination);
+                }
             }
         }
 
@@ -285,7 +320,7 @@ impl SimpleRoutingProtocol {
             for (id, neighbor_info) in neighbors_guard.iter() {
                 let status = if neighbor_info.is_alive { "🟢 ALIVE" } else { "🔴 DEAD" };
                 let last_seen = neighbor_info.last_seen.elapsed();
-                info!("  {} at {} - {} (last seen: {:?} ago)",
+                info!("  {} at {} - {} (last seen: {:?} ago)", 
                       id, neighbor_info.socket_addr, status, last_seen);
             }
             drop(neighbors_guard);
@@ -648,8 +683,29 @@ impl SimpleRoutingProtocol {
                             advertising_neighbor: update.router_id.clone(),
                         };
 
-                        new_routes.push(route);
-                        updated_route_states.push((corrected_destination.clone(), route_state));
+                        // Check if we should replace an existing route
+                        let should_add = {
+                            let router_guard = router.lock().await;
+                            let existing_route = router_guard.routing_table.find_route(&destination);
+
+                            match existing_route {
+                                Some(existing) => {
+                                    // Replace if new route has better metric, or same metric but from alive neighbor
+                                    route.metric < existing.metric ||
+                                        (route.metric == existing.metric && route.next_hop != existing.next_hop)
+                                },
+                                None => true,
+                            }
+                        };
+
+                        if should_add {
+                            info!("📥 Accepting route to {} via {} metric {} from {}", 
+                                  destination, actual_next_hop, route.metric, update.router_id);
+                            new_routes.push(route);
+                            updated_route_states.push((corrected_destination.clone(), route_state));
+                        } else {
+                            debug!("📋 Keeping existing route to {} (not better)", destination);
+                        }
                     }
                 }
             }

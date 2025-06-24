@@ -165,15 +165,36 @@ impl RoutingTable {
         Ok(removed_routes)
     }
 
-    // Enhanced method to check for better routes (now considers route age)
+    // Enhanced method to check for better routes (now considers neighbor availability)
     pub fn has_better_route(&self, route: &RouteEntry) -> bool {
-        if let Some(existing_route) = self.find_route(&route.destination) {
-            // Consider existing route better if it has lower or equal metric
-            // This prevents route flapping
-            existing_route.metric <= route.metric
+        if let Some(existing_route) = self.find_route_internal(&route.destination) {
+            // If metrics are the same, allow the update (this enables failover)
+            // Only block if existing route has strictly better (lower) metric
+            existing_route.metric < route.metric
         } else {
             false
         }
+    }
+
+    // New method to force route replacement regardless of metric
+    pub async fn replace_route(&mut self, route: RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
+        info!("Force replacing route to {} via {} metric {}", 
+              route.destination, route.next_hop, route.metric);
+
+        // Remove existing route if it exists
+        if let Some(existing_index) = self.find_route_index(&route.destination) {
+            let existing_route = &self.routes[existing_index];
+
+            if existing_route.source != RouteSource::Direct {
+                self.delete_system_route(existing_route).await?;
+            }
+
+            self.routes.remove(existing_index);
+        }
+
+        // Add the new route
+        self.add_route(route).await?;
+        Ok(())
     }
 
     // Method to find alternative routes when a route fails
@@ -205,7 +226,12 @@ impl RoutingTable {
         best_match
     }
 
-    fn find_route(&self, destination: &Ipv4Network) -> Option<&RouteEntry> {
+    fn find_route_internal(&self, destination: &Ipv4Network) -> Option<&RouteEntry> {
+        self.routes.iter().find(|route| route.destination == *destination)
+    }
+
+    // Public version of find_route for external access
+    pub fn find_route(&self, destination: &Ipv4Network) -> Option<&RouteEntry> {
         self.routes.iter().find(|route| route.destination == *destination)
     }
 
