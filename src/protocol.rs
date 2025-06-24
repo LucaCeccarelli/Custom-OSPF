@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 use tokio::time::interval;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::broadcast;
+use futures;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RoutingUpdate {
@@ -50,11 +53,14 @@ pub struct SimpleRoutingProtocol {
     router: Arc<Mutex<Router>>,
     sockets: Vec<Arc<UdpSocket>>,
     neighbors: Arc<Mutex<HashMap<String, NeighborInfo>>>,
-    route_states: Arc<Mutex<HashMap<String, RouteState>>>, // destination -> route state
+    route_states: Arc<Mutex<HashMap<String, RouteState>>>,
     sequence: Arc<Mutex<u64>>,
     port: u16,
     debug_mode: bool,
     our_ips: HashSet<Ipv4Addr>,
+    is_running: Arc<AtomicBool>,
+    shutdown_tx: Arc<Mutex<Option<broadcast::Sender<()>>>>,
+    task_handles: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
 impl SimpleRoutingProtocol {
@@ -114,31 +120,236 @@ impl SimpleRoutingProtocol {
             port,
             debug_mode,
             our_ips,
+            is_running: Arc::new(AtomicBool::new(false)),
+            shutdown_tx: Arc::new(Mutex::new(None)),
+            task_handles: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
-    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("=== Starting routing protocol ===");
+    pub async fn get_status(&self) -> (String, bool) {
+        let router_guard = self.router.lock().await;
+        let router_id = router_guard.id.clone();
+        drop(router_guard);
 
-        self.print_initial_state().await;
+        let is_running = self.is_running.load(Ordering::Relaxed);
+        (router_id, is_running)
+    }
 
-        let hello_task = self.start_hello_task();
-        let update_task = self.start_update_task();
-        let listen_task = self.start_listen_task();
-        let cleanup_task = self.start_cleanup_task(); // New cleanup task
-        let debug_task = if self.debug_mode {
-            Some(self.start_debug_task())
+    pub async fn get_neighbors(&self) -> Vec<crate::control_server::NeighborInfo> {
+        let neighbors_guard = self.neighbors.lock().await;
+        let mut neighbor_list = Vec::new();
+
+        for (router_id, neighbor_info) in neighbors_guard.iter() {
+            let last_seen = format!("{:?} ago", neighbor_info.last_seen.elapsed());
+            let interfaces: Vec<String> = neighbor_info.router_info.interfaces
+                .values()
+                .map(|iface| iface.ip.to_string())
+                .collect();
+
+            neighbor_list.push(crate::control_server::NeighborInfo {
+                router_id: router_id.clone(),
+                ip_address: neighbor_info.socket_addr.ip().to_string(),
+                last_seen,
+                is_alive: neighbor_info.is_alive,
+                interfaces,
+            });
+        }
+
+        neighbor_list
+    }
+
+    pub async fn get_neighbors_of(&self, router_id: &str) -> Option<Vec<crate::control_server::NeighborInfo>> {
+        // For now, we can only return neighbors of our own router
+        // In a full implementation, you'd need to track neighbors of neighbors
+        let router_guard = self.router.lock().await;
+        if router_guard.id == router_id {
+            drop(router_guard);
+            Some(self.get_neighbors().await)
+        } else {
+            // Could be extended to track neighbor topology
+            None
+        }
+    }
+
+    pub async fn start_protocol(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.is_running.load(Ordering::Relaxed) {
+            return Ok(()); // Already running
+        }
+
+        info!("Starting routing protocol...");
+        self.is_running.store(true, Ordering::Relaxed);
+
+        // Create shutdown channel
+        let (shutdown_tx, _) = broadcast::channel(1);
+        {
+            let mut tx_guard = self.shutdown_tx.lock().await;
+            *tx_guard = Some(shutdown_tx);
+        }
+
+        self.start_tasks().await?;
+        info!("✓ Routing protocol started successfully");
+        Ok(())
+    }
+
+    pub async fn stop_protocol(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if !self.is_running.load(Ordering::Relaxed) {
+            return Ok(()); // Already stopped
+        }
+
+        info!("Stopping routing protocol...");
+        self.is_running.store(false, Ordering::Relaxed);
+
+        // Send shutdown signal
+        {
+            let tx_guard = self.shutdown_tx.lock().await;
+            if let Some(ref tx) = *tx_guard {
+                let _ = tx.send(());
+            }
+        }
+
+        // Wait for tasks to complete
+        {
+            let mut handles_guard = self.task_handles.lock().await;
+            for handle in handles_guard.drain(..) {
+                handle.abort();
+            }
+        }
+
+        info!("✓ Routing protocol stopped successfully");
+        Ok(())
+    }
+
+    pub async fn start_tasks(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if !self.is_running.load(Ordering::Relaxed) {
+            self.is_running.store(true, Ordering::Relaxed);
+        }
+
+        let mut handles_guard = self.task_handles.lock().await;
+
+        // Clear old handles
+        for handle in handles_guard.drain(..) {
+            handle.abort();
+        }
+
+        // Create shutdown receiver for each task
+        let shutdown_rx = {
+            let tx_guard = self.shutdown_tx.lock().await;
+            if let Some(ref tx) = *tx_guard {
+                tx.subscribe()
+            } else {
+                let (tx, rx) = broadcast::channel(1);
+                *self.shutdown_tx.lock().await = Some(tx);
+                rx
+            }
+        };
+
+        // Start hello task
+        let hello_handle = {
+            let router = self.router.clone();
+            let sockets = self.sockets.clone();
+            let port = self.port;
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                Self::hello_task(router, sockets, port, is_running, &mut shutdown_rx).await;
+            })
+        };
+
+        // Start update task
+        let update_handle = {
+            let router = self.router.clone();
+            let sockets = self.sockets.clone();
+            let sequence = self.sequence.clone();
+            let port = self.port;
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                Self::update_task(router, sockets, sequence, port, is_running, &mut shutdown_rx).await;
+            })
+        };
+
+        // Start listen task
+        let listen_handle = {
+            let router = self.router.clone();
+            let neighbors = self.neighbors.clone();
+            let route_states = self.route_states.clone();
+            let sockets = self.sockets.clone();
+            let our_ips = self.our_ips.clone();
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                Self::listen_task(router, neighbors, route_states, sockets, our_ips, is_running, &mut shutdown_rx).await;
+            })
+        };
+
+        // Start cleanup task
+        let cleanup_handle = {
+            let neighbors = self.neighbors.clone();
+            let route_states = self.route_states.clone();
+            let router = self.router.clone();
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            tokio::spawn(async move {
+                Self::cleanup_task(neighbors, route_states, router, is_running, &mut shutdown_rx).await;
+            })
+        };
+
+        // Start debug task if enabled
+        let debug_handle = if self.debug_mode {
+            let router = self.router.clone();
+            let neighbors = self.neighbors.clone();
+            let is_running = self.is_running.clone();
+            let mut shutdown_rx = shutdown_rx.resubscribe();
+
+            Some(tokio::spawn(async move {
+                Self::debug_task(router, neighbors, is_running, &mut shutdown_rx).await;
+            }))
         } else {
             None
         };
 
-        if let Some(debug_task) = debug_task {
-            tokio::try_join!(hello_task, update_task, listen_task, cleanup_task, debug_task)?;
-        } else {
-            tokio::try_join!(hello_task, update_task, listen_task, cleanup_task)?;
+        // Store handles
+        handles_guard.push(hello_handle);
+        handles_guard.push(update_handle);
+        handles_guard.push(listen_handle);
+        handles_guard.push(cleanup_handle);
+
+        if let Some(debug_handle) = debug_handle {
+            handles_guard.push(debug_handle);
         }
 
+        info!("✓ All protocol tasks started");
         Ok(())
+    }
+
+    pub async fn get_routing_table(&self) -> Vec<serde_json::Value> {
+        let router_guard = self.router.lock().await;
+        let routes = router_guard.routing_table.get_routes();
+
+        routes.iter().map(|route| {
+            serde_json::json!({
+                "destination": route.destination.to_string(),
+                "next_hop": if route.next_hop.is_unspecified() { 
+                    "direct".to_string() 
+                } else { 
+                    route.next_hop.to_string() 
+                },
+                "interface": route.interface,
+                "metric": route.metric,
+                "source": format!("{:?}", route.source)
+            })
+        }).collect()
+    }
+
+    // Modified start method - now just calls start_tasks
+    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        info!("=== Starting routing protocol ===");
+        self.print_initial_state().await;
+        self.start_tasks().await
     }
 
     async fn print_initial_state(&self) {
@@ -167,111 +378,360 @@ impl SimpleRoutingProtocol {
         info!("=============================");
     }
 
-    // New cleanup task to handle dead neighbors and stale routes
-    async fn start_cleanup_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let neighbors = self.neighbors.clone();
-        let route_states = self.route_states.clone();
-        let router = self.router.clone();
-
-        let mut interval = interval(Self::CLEANUP_INTERVAL);
+    // Static task methods with shutdown support
+    async fn hello_task(
+        router: Arc<Mutex<Router>>,
+        sockets: Vec<Arc<UdpSocket>>,
+        port: u16,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut interval = interval(Self::HELLO_INTERVAL);
 
         loop {
-            interval.tick().await;
-
-            let now = Instant::now();
-            let mut dead_neighbors = Vec::new();
-            let mut stale_routes = Vec::new();
-
-            // Check for dead neighbors
-            {
-                let mut neighbors_guard = neighbors.lock().await;
-                for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
-                    if now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT {
-                        if neighbor_info.is_alive {
-                            warn!("X Neighbor {} is now considered DEAD (last seen: {:?} ago)",
-                                  neighbor_id, now.duration_since(neighbor_info.last_seen));
-                            neighbor_info.is_alive = false;
-                            dead_neighbors.push(neighbor_id.clone());
-                        }
-                    } else if !neighbor_info.is_alive {
-                        info!("O Neighbor {} is now ALIVE again", neighbor_id);
-                        neighbor_info.is_alive = true;
-                    }
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    debug!("Hello task shutting down");
+                    break;
                 }
-            }
-
-            // Check for stale routes
-            {
-                let route_states_guard = route_states.lock().await;
-                for (destination, route_state) in route_states_guard.iter() {
-                    if now.duration_since(route_state.last_advertised) > Self::ROUTE_TIMEOUT {
-                        warn!("Route to {} is stale (last advertised: {:?} ago)",
-                              destination, now.duration_since(route_state.last_advertised));
-                        stale_routes.push(destination.clone());
+                _ = interval.tick() => {
+                    if !is_running.load(Ordering::Relaxed) {
+                        break;
                     }
-                }
-            }
 
-            // Remove routes from dead neighbors and stale routes
-            if !dead_neighbors.is_empty() || !stale_routes.is_empty() {
-                let mut routes_to_remove = HashSet::new();
-
-                {
-                    let route_states_guard = route_states.lock().await;
-                    for (destination, route_state) in route_states_guard.iter() {
-                        // Remove routes from dead neighbors
-                        if dead_neighbors.contains(&route_state.advertising_neighbor) {
-                            routes_to_remove.insert(destination.clone());
-                            info!("Marking route to {} for removal (dead neighbor: {})",
-                                  destination, route_state.advertising_neighbor);
-                        }
-                        // Remove stale routes
-                        if stale_routes.contains(destination) {
-                            routes_to_remove.insert(destination.clone());
-                            info!("Marking route to {} for removal (stale route)", destination);
-                        }
-                    }
-                }
-
-                if !routes_to_remove.is_empty() {
-                    info!("Cleaning up {} stale/dead routes", routes_to_remove.len());
-                    self.remove_routes(routes_to_remove).await?;
-                }
-            }
-
-            // Also remove routes directly from routing table by dead neighbor IP
-            for dead_neighbor_id in &dead_neighbors {
-                if let Some(dead_neighbor_ip) = self.get_neighbor_ip(dead_neighbor_id).await {
-                    info!("X Removing routes via dead neighbor IP: {}", dead_neighbor_ip);
-                    let mut router_guard = router.lock().await;
-                    let removed_routes = router_guard.routing_table.remove_routes_via_nexthop(dead_neighbor_ip).await?;
-                    if !removed_routes.is_empty() {
-                        info!("V Successfully removed {} routes via dead neighbor {}",
-                              removed_routes.len(), dead_neighbor_ip);
-                    }
+                    let router_guard = router.lock().await;
+                    let router_info = router_guard.get_router_info();
                     drop(router_guard);
-                }
-            }
 
-            // Clean up completely dead neighbors after some time
-            {
-                let mut neighbors_guard = neighbors.lock().await;
-                neighbors_guard.retain(|neighbor_id, neighbor_info| {
-                    if !neighbor_info.is_alive &&
-                        now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT * 2 {
-                        info!("Removing dead neighbor {} from neighbor table", neighbor_id);
-                        false
-                    } else {
-                        true
+                    let hello = HelloMessage {
+                        router_id: router_info.router_id.clone(),
+                        interfaces: router_info.interfaces
+                            .iter()
+                            .map(|(name, info)| (name.clone(), info.ip.to_string()))
+                            .collect(),
+                    };
+
+                    if let Ok(message) = serde_json::to_string(&hello) {
+                        let hello_packet = format!("HELLO:{}", message);
+
+                        if let Some(socket) = sockets.first() {
+                            let router_guard = router.lock().await;
+                            for (_, interface) in &router_guard.interfaces {
+                                let broadcast_addr = interface.network.broadcast();
+                                let broadcast_target = format!("{}:{}", broadcast_addr, port);
+
+                                if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
+                                    if let Err(e) = socket.send_to(hello_packet.as_bytes(), target_addr).await {
+                                        warn!("Failed to send hello from {} to {}: {}", interface.ip, target_addr, e);
+                                    } else {
+                                        debug!("✓ Sent HELLO from {} to {}", interface.ip, target_addr);
+                                    }
+                                }
+                            }
+                            drop(router_guard);
+                        }
                     }
-                });
+                }
             }
         }
     }
 
-    // Helper method to get neighbor IP from neighbor ID
-    async fn get_neighbor_ip(&self, neighbor_id: &str) -> Option<Ipv4Addr> {
-        let neighbors_guard = self.neighbors.lock().await;
+    async fn update_task(
+        router: Arc<Mutex<Router>>,
+        sockets: Vec<Arc<UdpSocket>>,
+        sequence: Arc<Mutex<u64>>,
+        port: u16,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut interval = interval(Self::UPDATE_INTERVAL);
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    debug!("Update task shutting down");
+                    break;
+                }
+                _ = interval.tick() => {
+                    if !is_running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let mut seq_guard = sequence.lock().await;
+                    *seq_guard += 1;
+                    let current_seq = *seq_guard;
+                    drop(seq_guard);
+
+                    let router_guard = router.lock().await;
+                    let routes: Vec<RouteInfo> = router_guard
+                        .routing_table
+                        .get_routes()
+                        .iter()
+                        .map(|route| {
+                            RouteInfo {
+                                destination: route.destination.to_string(),
+                                metric: route.metric,
+                                next_hop: route.next_hop.to_string(),
+                            }
+                        })
+                        .collect();
+                    let router_id = router_guard.id.clone();
+                    drop(router_guard);
+
+                    let update = RoutingUpdate {
+                        router_id: router_id.clone(),
+                        sequence: current_seq,
+                        routes,
+                    };
+
+                    if let Ok(message) = serde_json::to_string(&update) {
+                        let update_packet = format!("UPDATE:{}", message);
+
+                        if let Some(socket) = sockets.first() {
+                            let router_guard = router.lock().await;
+                            for (_, interface) in &router_guard.interfaces {
+                                let broadcast_addr = interface.network.broadcast();
+                                let broadcast_target = format!("{}:{}", broadcast_addr, port);
+
+                                if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
+                                    if let Err(e) = socket.send_to(update_packet.as_bytes(), target_addr).await {
+                                        warn!("Failed to send update from {} to {}: {}", interface.ip, target_addr, e);
+                                    } else {
+                                        debug!("✓ Sent UPDATE from {} to {} with {} routes (seq: {})",
+                                              interface.ip, target_addr, update.routes.len(), current_seq);
+                                    }
+                                }
+                            }
+                            drop(router_guard);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn listen_task(
+        router: Arc<Mutex<Router>>,
+        neighbors: Arc<Mutex<HashMap<String, NeighborInfo>>>,
+        route_states: Arc<Mutex<HashMap<String, RouteState>>>,
+        sockets: Vec<Arc<UdpSocket>>,
+        our_ips: HashSet<Ipv4Addr>,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut tasks = Vec::new();
+
+        for (i, socket) in sockets.iter().enumerate() {
+            let socket_clone = socket.clone();
+            let router_clone = router.clone();
+            let neighbors_clone = neighbors.clone();
+            let route_states_clone = route_states.clone();
+            let our_ips_clone = our_ips.clone();
+            let is_running_clone = is_running.clone();
+            let mut shutdown_rx_clone = shutdown_rx.resubscribe();
+
+            let task = tokio::spawn(async move {
+                let mut buffer = [0u8; 4096];
+
+                loop {
+                    tokio::select! {
+                        _ = shutdown_rx_clone.recv() => {
+                            debug!("Listen task {} shutting down", i);
+                            break;
+                        }
+                        result = socket_clone.recv_from(&mut buffer) => {
+                            if !is_running_clone.load(Ordering::Relaxed) {
+                                break;
+                            }
+
+                            match result {
+                                Ok((len, addr)) => {
+                                    if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
+                                        if our_ips_clone.contains(&ipv4_addr) {
+                                            debug!("Ignoring loopback message from our own IP: {}", addr.ip());
+                                            continue;
+                                        }
+                                    }
+
+                                    let data = String::from_utf8_lossy(&buffer[..len]);
+                                    debug!("Socket {} received {} bytes from {}", i, len, addr);
+
+                                    if let Err(e) = Self::handle_message_static(&data, addr, &router_clone, &neighbors_clone, &route_states_clone).await {
+                                        warn!("Failed to handle message from {}: {}", addr, e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Socket {} failed to receive message: {}", i, e);
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            tasks.push(task);
+        }
+
+        futures::future::join_all(tasks).await;
+    }
+
+    async fn cleanup_task(
+        neighbors: Arc<Mutex<HashMap<String, NeighborInfo>>>,
+        route_states: Arc<Mutex<HashMap<String, RouteState>>>,
+        router: Arc<Mutex<Router>>,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut interval = interval(Self::CLEANUP_INTERVAL);
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    debug!("Cleanup task shutting down");
+                    break;
+                }
+                _ = interval.tick() => {
+                    if !is_running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    // Cleanup logic (same as before but moved to static method)
+                    let now = Instant::now();
+                    let mut dead_neighbors = Vec::new();
+                    let mut stale_routes = Vec::new();
+
+                    // Check for dead neighbors
+                    {
+                        let mut neighbors_guard = neighbors.lock().await;
+                        for (neighbor_id, neighbor_info) in neighbors_guard.iter_mut() {
+                            if now.duration_since(neighbor_info.last_seen) > Self::NEIGHBOR_TIMEOUT {
+                                if neighbor_info.is_alive {
+                                    warn!("X Neighbor {} is now considered DEAD (last seen: {:?} ago)",
+                                          neighbor_id, now.duration_since(neighbor_info.last_seen));
+                                    neighbor_info.is_alive = false;
+                                    dead_neighbors.push(neighbor_id.clone());
+                                }
+                            } else if !neighbor_info.is_alive {
+                                info!("O Neighbor {} is now ALIVE again", neighbor_id);
+                                neighbor_info.is_alive = true;
+                            }
+                        }
+                    }
+
+                    // Check for stale routes and clean up
+                    {
+                        let route_states_guard = route_states.lock().await;
+                        for (destination, route_state) in route_states_guard.iter() {
+                            if now.duration_since(route_state.last_advertised) > Self::ROUTE_TIMEOUT {
+                                stale_routes.push(destination.clone());
+                            }
+                        }
+                    }
+
+                    // Remove stale routes and routes from dead neighbors
+                    if !dead_neighbors.is_empty() || !stale_routes.is_empty() {
+                        let mut routes_to_remove = HashSet::new();
+
+                        {
+                            let route_states_guard = route_states.lock().await;
+                            for (destination, route_state) in route_states_guard.iter() {
+                                if dead_neighbors.contains(&route_state.advertising_neighbor) ||
+                                   stale_routes.contains(destination) {
+                                    routes_to_remove.insert(destination.clone());
+                                }
+                            }
+                        }
+
+                        if !routes_to_remove.is_empty() {
+                            Self::remove_routes_static(routes_to_remove, &router, &route_states).await;
+                        }
+                    }
+
+                    // Clean up dead neighbor routes by IP
+                    for dead_neighbor_id in &dead_neighbors {
+                        if let Some(dead_neighbor_ip) = Self::get_neighbor_ip_static(dead_neighbor_id, &neighbors).await {
+                            let mut router_guard = router.lock().await;
+                            if let Ok(removed_routes) = router_guard.routing_table.remove_routes_via_nexthop(dead_neighbor_ip).await {
+                                if !removed_routes.is_empty() {
+                                    info!("V Successfully removed {} routes via dead neighbor {}", 
+                                          removed_routes.len(), dead_neighbor_ip);
+                                }
+                            }
+                            drop(router_guard);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn debug_task(
+        router: Arc<Mutex<Router>>,
+        neighbors: Arc<Mutex<HashMap<String, NeighborInfo>>>,
+        is_running: Arc<AtomicBool>,
+        shutdown_rx: &mut broadcast::Receiver<()>,
+    ) {
+        let mut interval = interval(Duration::from_secs(30));
+
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    debug!("Debug task shutting down");
+                    break;
+                }
+                _ = interval.tick() => {
+                    if !is_running.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    info!("=== DEBUG STATUS ===");
+
+                    let neighbors_guard = neighbors.lock().await;
+                    info!("Neighbors ({}): ", neighbors_guard.len());
+                    for (id, neighbor_info) in neighbors_guard.iter() {
+                        let status = if neighbor_info.is_alive { "O ALIVE" } else { "X DEAD" };
+                        let last_seen = neighbor_info.last_seen.elapsed();
+                        info!("  {} at {} - {} (last seen: {:?} ago)",
+                              id, neighbor_info.socket_addr, status, last_seen);
+                    }
+                    drop(neighbors_guard);
+
+                    let router_guard = router.lock().await;
+                    info!("Current routing table:");
+                    let routes = router_guard.routing_table.get_routes();
+                    if routes.is_empty() {
+                        info!("  (no routes)");
+                    } else {
+                        for route in routes {
+                            let next_hop_str = if route.next_hop.is_unspecified() {
+                                "direct".to_string()
+                            } else {
+                                route.next_hop.to_string()
+                            };
+
+                            info!("  {} via {} dev {} metric {} ({:?})",
+                                  route.destination,
+                                  next_hop_str,
+                                  route.interface,
+                                  route.metric,
+                                  route.source);
+                        }
+                    }
+                    drop(router_guard);
+
+                    info!("===================");
+                }
+            }
+        }
+    }
+
+    // Helper static methods
+    async fn get_neighbor_ip_static(
+        neighbor_id: &str,
+        neighbors: &Arc<Mutex<HashMap<String, NeighborInfo>>>,
+    ) -> Option<Ipv4Addr> {
+        let neighbors_guard = neighbors.lock().await;
         if let Some(neighbor_info) = neighbors_guard.get(neighbor_id) {
             if let std::net::IpAddr::V4(ipv4) = neighbor_info.socket_addr.ip() {
                 Some(ipv4)
@@ -283,16 +743,19 @@ impl SimpleRoutingProtocol {
         }
     }
 
-    async fn remove_routes(&self, destinations: HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
-        let mut router_guard = self.router.lock().await;
-        let mut route_states_guard = self.route_states.lock().await;
+    async fn remove_routes_static(
+        destinations: HashSet<String>,
+        router: &Arc<Mutex<Router>>,
+        route_states: &Arc<Mutex<HashMap<String, RouteState>>>,
+    ) {
+        let mut router_guard = router.lock().await;
+        let mut route_states_guard = route_states.lock().await;
 
         for destination in destinations {
             if let Some(route_state) = route_states_guard.remove(&destination) {
                 info!("Removing route to {} (was via {})",
                       destination, route_state.advertising_neighbor);
 
-                // Remove from system routing table
                 if let Err(e) = router_guard.routing_table.remove_route(&route_state.route).await {
                     warn!("Failed to remove route to {}: {}", destination, e);
                 } else {
@@ -300,207 +763,15 @@ impl SimpleRoutingProtocol {
                 }
             }
         }
-
-        Ok(())
     }
 
-    async fn start_debug_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let router = self.router.clone();
-        let neighbors = self.neighbors.clone();
-
-        let mut interval = interval(Duration::from_secs(30));
-
-        loop {
-            interval.tick().await;
-
-            info!("=== DEBUG STATUS ===");
-
-            let neighbors_guard = neighbors.lock().await;
-            info!("Neighbors ({}): ", neighbors_guard.len());
-            for (id, neighbor_info) in neighbors_guard.iter() {
-                let status = if neighbor_info.is_alive { "O ALIVE" } else { "X DEAD" };
-                let last_seen = neighbor_info.last_seen.elapsed();
-                info!("  {} at {} - {} (last seen: {:?} ago)",
-                      id, neighbor_info.socket_addr, status, last_seen);
-            }
-            drop(neighbors_guard);
-
-            let router_guard = router.lock().await;
-            info!("Current routing table:");
-            let routes = router_guard.routing_table.get_routes();
-            if routes.is_empty() {
-                info!("  (no routes)");
-            } else {
-                for route in routes {
-                    let next_hop_str = if route.next_hop.is_unspecified() {
-                        "direct".to_string()
-                    } else {
-                        route.next_hop.to_string()
-                    };
-
-                    info!("  {} via {} dev {} metric {} ({:?})",
-                          route.destination,
-                          next_hop_str,
-                          route.interface,
-                          route.metric,
-                          route.source);
-                }
-            }
-            drop(router_guard);
-
-            info!("===================");
-        }
+    // Remove old task methods and keep only the static message handling methods
+    async fn get_neighbor_ip(&self, neighbor_id: &str) -> Option<Ipv4Addr> {
+        Self::get_neighbor_ip_static(neighbor_id, &self.neighbors).await
     }
 
-    async fn start_hello_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let router = self.router.clone();
-        let mut interval = interval(Self::HELLO_INTERVAL);
-
-        loop {
-            interval.tick().await;
-
-            let router_guard = router.lock().await;
-            let router_info = router_guard.get_router_info();
-            drop(router_guard);
-
-            let hello = HelloMessage {
-                router_id: router_info.router_id.clone(),
-                interfaces: router_info.interfaces
-                    .iter()
-                    .map(|(name, info)| (name.clone(), info.ip.to_string()))
-                    .collect(),
-            };
-
-            let message = serde_json::to_string(&hello)?;
-            let hello_packet = format!("HELLO:{}", message);
-
-            if let Some(socket) = self.sockets.first() {
-                let router_guard = router.lock().await;
-                for (_, interface) in &router_guard.interfaces {
-                    let broadcast_addr = interface.network.broadcast();
-                    let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
-
-                    if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
-                        if let Err(e) = socket.send_to(hello_packet.as_bytes(), target_addr).await {
-                            warn!("Failed to send hello from {} to {}: {}", interface.ip, target_addr, e);
-                        } else {
-                            debug!("✓ Sent HELLO from {} to {}", interface.ip, target_addr);
-                        }
-                    }
-                }
-                drop(router_guard);
-            }
-        }
-    }
-
-    async fn start_update_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let router = self.router.clone();
-        let sequence = self.sequence.clone();
-        let mut interval = interval(Self::UPDATE_INTERVAL);
-
-        loop {
-            interval.tick().await;
-
-            let mut seq_guard = sequence.lock().await;
-            *seq_guard += 1;
-            let current_seq = *seq_guard;
-            drop(seq_guard);
-
-            let router_guard = router.lock().await;
-            let routes: Vec<RouteInfo> = router_guard
-                .routing_table
-                .get_routes()
-                .iter()
-                .map(|route| {
-                    let destination_str = route.destination.to_string();
-
-                    RouteInfo {
-                        destination: destination_str,
-                        metric: route.metric,
-                        next_hop: route.next_hop.to_string(),
-                    }
-                })
-                .collect();
-            let router_id = router_guard.id.clone();
-            drop(router_guard);
-
-            let update = RoutingUpdate {
-                router_id: router_id.clone(),
-                sequence: current_seq,
-                routes,
-            };
-
-            let message = serde_json::to_string(&update)?;
-            let update_packet = format!("UPDATE:{}", message);
-
-            if let Some(socket) = self.sockets.first() {
-                let router_guard = router.lock().await;
-                for (_, interface) in &router_guard.interfaces {
-                    let broadcast_addr = interface.network.broadcast();
-                    let broadcast_target = format!("{}:{}", broadcast_addr, self.port);
-
-                    if let Ok(target_addr) = broadcast_target.parse::<SocketAddr>() {
-                        if let Err(e) = socket.send_to(update_packet.as_bytes(), target_addr).await {
-                            warn!("Failed to send update from {} to {}: {}", interface.ip, target_addr, e);
-                        } else {
-                            debug!("✓ Sent UPDATE from {} to {} with {} routes (seq: {})",
-                              interface.ip, target_addr, update.routes.len(), current_seq);
-                        }
-                    }
-                }
-                drop(router_guard);
-            }
-        }
-    }
-
-    async fn start_listen_task(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let router = self.router.clone();
-        let neighbors = self.neighbors.clone();
-        let route_states = self.route_states.clone();
-
-        info!("Started listening for messages on {} sockets...", self.sockets.len());
-
-        let mut tasks = Vec::new();
-
-        for (i, socket) in self.sockets.iter().enumerate() {
-            let socket_clone = socket.clone();
-            let router_clone = router.clone();
-            let neighbors_clone = neighbors.clone();
-            let route_states_clone = route_states.clone();
-            let our_ips_clone = self.our_ips.clone();
-
-            let task = tokio::spawn(async move {
-                let mut buffer = [0u8; 4096];
-
-                loop {
-                    match socket_clone.recv_from(&mut buffer).await {
-                        Ok((len, addr)) => {
-                            if let std::net::IpAddr::V4(ipv4_addr) = addr.ip() {
-                                if our_ips_clone.contains(&ipv4_addr) {
-                                    debug!("Ignoring loopback message from our own IP: {}", addr.ip());
-                                    continue;
-                                }
-                            }
-
-                            let data = String::from_utf8_lossy(&buffer[..len]);
-                            debug!("Socket {} received {} bytes from {}", i, len, addr);
-
-                            if let Err(e) = Self::handle_message_static(&data, addr, &router_clone, &neighbors_clone, &route_states_clone).await {
-                                warn!("Failed to handle message from {}: {}", addr, e);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Socket {} failed to receive message: {}", i, e);
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                        }
-                    }
-                }
-            });
-
-            tasks.push(task);
-        }
-
-        futures::future::join_all(tasks).await;
+    async fn remove_routes(&self, destinations: HashSet<String>) -> Result<(), Box<dyn std::error::Error>> {
+        Self::remove_routes_static(destinations, &self.router, &self.route_states).await;
         Ok(())
     }
 
