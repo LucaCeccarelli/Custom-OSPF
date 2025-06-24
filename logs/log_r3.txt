@@ -1,0 +1,950 @@
+sudo: unable to resolve host r3: Name or service not known
+[2025-06-24T18:56:49Z INFO  custom_ospf] === Starting Router R3 ===
+[2025-06-24T18:56:49Z INFO  custom_ospf] Interfaces: ["enp0s9", "enp0s8"]
+[2025-06-24T18:56:49Z INFO  custom_ospf] Listen port: 5555
+[2025-06-24T18:56:49Z INFO  custom_ospf] Control port: 8080
+[2025-06-24T18:56:49Z INFO  custom_ospf] Debug mode: true
+[2025-06-24T18:56:49Z INFO  custom_ospf::router] Creating router R3
+[2025-06-24T18:56:49Z INFO  custom_ospf::network] Discovering interfaces: ["enp0s9", "enp0s8"]
+[2025-06-24T18:56:49Z DEBUG custom_ospf::network] Found IPv4 network 10.3.0.3/24 on interface enp0s9
+[2025-06-24T18:56:49Z INFO  custom_ospf::network] Found interface: enp0s9 -> 10.3.0.3 (10.3.0.3/24)
+[2025-06-24T18:56:49Z DEBUG custom_ospf::network] Found IPv4 network 192.168.3.1/24 on interface enp0s8
+[2025-06-24T18:56:49Z INFO  custom_ospf::network] Found interface: enp0s8 -> 192.168.3.1 (192.168.3.1/24)
+[2025-06-24T18:56:49Z DEBUG custom_ospf::routing_table] Found local network: 10.0.2.15/24 on interface enp0s3
+[2025-06-24T18:56:49Z DEBUG custom_ospf::routing_table] Found local network: 192.168.3.1/24 on interface enp0s8
+[2025-06-24T18:56:49Z DEBUG custom_ospf::routing_table] Found local network: 10.3.0.3/24 on interface enp0s9
+[2025-06-24T18:56:49Z DEBUG custom_ospf::routing_table] Discovered local networks: [Ipv4Network { addr: 10.0.2.15, prefix: 24 }, Ipv4Network { addr: 192.168.3.1, prefix: 24 }, Ipv4Network { addr: 10.3.0.3, prefix: 24 }]
+[2025-06-24T18:56:49Z INFO  custom_ospf::routing_table] Adding new route to 192.168.3.1/24 via direct metric 0
+[2025-06-24T18:56:49Z INFO  custom_ospf::routing_table] Adding new route to 10.3.0.3/24 via direct metric 0
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Socket bound to 0.0.0.0:5555 for all interfaces
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Router created successfully
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Bound to 1 sockets on port 5555
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Our IPs: {10.3.0.3, 192.168.3.1}
+[2025-06-24T18:56:49Z INFO  custom_ospf] === Control Server Commands ===
+[2025-06-24T18:56:49Z INFO  custom_ospf] Connect with: telnet 127.0.0.1 8080
+[2025-06-24T18:56:49Z INFO  custom_ospf] Available commands:
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "status"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "neighbors"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "neighbors_of", "args": "ROUTER_ID"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "routing_table"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "start"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "stop"}
+[2025-06-24T18:56:49Z INFO  custom_ospf]   {"command": "help"}
+[2025-06-24T18:56:49Z INFO  custom_ospf] ===============================
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Starting routing protocol...
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager] All protocol tasks started
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol] Routing protocol started successfully
+[2025-06-24T18:56:49Z INFO  custom_ospf] Protocol and control server started successfully
+[2025-06-24T18:56:49Z INFO  custom_ospf::control_server] Control server listening on 127.0.0.1:8080
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager] Neighbors (0): 
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 2 routes (seq: 1)
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 2 routes (seq: 1)
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:56:49Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:56:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:56:52Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 173 bytes from 10.3.0.5:5555
+[2025-06-24T18:56:52Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 2 routes (seq: 1)
+[2025-06-24T18:56:52Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:56:52Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:56:52Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:56:52Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:56:52Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:56:52Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:56:52Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:56:52Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:56:52Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:56:52Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:56:52Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:56:52Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:56:52Z INFO  custom_ospf::protocol::task_manager] Neighbor R5 is now ALIVE at 10.3.0.5:5555
+[2025-06-24T18:56:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:56:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:56:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:56:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:56:56Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:56:56Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 2)
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 2)
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:56:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:00Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:00Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:00Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:00Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 2)
+[2025-06-24T18:57:00Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:00Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:00Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:57:00Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:04Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:04Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 3)
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:05Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 3)
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 3)
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:08Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:57:08Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:57:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:57:08Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:08Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:08Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:08Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:08Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:09Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:57:09Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:09Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:57:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:09Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:57:09Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:57:09Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:57:12Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:12Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 4)
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 4)
+[2025-06-24T18:57:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 4)
+[2025-06-24T18:57:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:57:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:16Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:57:16Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:16Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:16Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:16Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager] Neighbors (1): 
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager]   R5 at 10.3.0.5:5555 - O ALIVE (last seen: 3.077505926s ago)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager]   10.2.0.0/24 via 10.3.0.5 dev enp0s9 metric 1 (Protocol)
+[2025-06-24T18:57:19Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:57:20Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:20Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 5)
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:21Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 5)
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 5)
+[2025-06-24T18:57:25Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:25Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:25Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:57:25Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:28Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:28Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 6)
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 6)
+[2025-06-24T18:57:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 6)
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:33Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:57:33Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:57:33Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:33Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:33Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:33Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:33Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:34Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:57:34Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:34Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:57:34Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:57:34Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:57:34Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:57:36Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:36Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 7)
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:37Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 7)
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 7)
+[2025-06-24T18:57:40Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:40Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:40Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:57:40Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:40Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:57:40Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:40Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:40Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:40Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:41Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:41Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:44Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:44Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:57:44Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 8)
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 8)
+[2025-06-24T18:57:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:48Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:48Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:48Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:48Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 8)
+[2025-06-24T18:57:48Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:57:48Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:57:48Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:57:48Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager] Neighbors (1): 
+[2025-06-24T18:57:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   R5 at 10.3.0.5:5555 - O ALIVE (last seen: 1.113470508s ago)
+[2025-06-24T18:57:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   10.2.0.0/24 via 10.3.0.5 dev enp0s9 metric 1 (Protocol)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   192.168.2.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   10.1.0.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager]   192.168.1.0/24 via 10.3.0.5 dev enp0s9 metric 3 (Protocol)
+[2025-06-24T18:57:49Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:57:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:52Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:52Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 9)
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 9)
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 434 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 9)
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:57:57Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:57:57Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:57:57Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:57:57Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:57:57Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:57:57Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:57:57Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:57:57Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:57:59Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:57:59Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:57:59Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:57:59Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:57:59Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:57:59Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:58:00Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:00Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 10)
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 10)
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 10)
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.5 metric 4 from R5
+[2025-06-24T18:58:04Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:04Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:58:04Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:58:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:08Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:08Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 11)
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 11)
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:12Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:12Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:12Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:12Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 11)
+[2025-06-24T18:58:12Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:58:12Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:12Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:58:12Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:16Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:16Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 12)
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 12)
+[2025-06-24T18:58:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager] Neighbors (1): 
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   R5 at 10.3.0.5:5555 - O ALIVE (last seen: 3.093784308s ago)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   10.2.0.0/24 via 10.3.0.5 dev enp0s9 metric 1 (Protocol)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   192.168.2.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   10.1.0.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager]   192.168.1.0/24 via 10.3.0.5 dev enp0s9 metric 3 (Protocol)
+[2025-06-24T18:58:19Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 12)
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:58:20Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:20Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:58:20Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:58:20Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:20Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:20Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:20Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:20Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:24Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:58:24Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:24Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:58:24Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:58:24Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:58:24Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:58:24Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:24Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 13)
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:25Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 13)
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 13)
+[2025-06-24T18:58:28Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:28Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:58:28Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:58:28Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:28Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:28Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:28Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:28Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:28Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:58:29Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:58:32Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:32Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 14)
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 14)
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:33Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:36Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:36Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:36Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:36Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 14)
+[2025-06-24T18:58:36Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:58:36Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:36Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:58:36Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:37Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:37Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:37Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:40Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:40Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 15)
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 15)
+[2025-06-24T18:58:41Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 15)
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:58:44Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:58:44Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:58:44Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.5 metric 4 from R5
+[2025-06-24T18:58:44Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:44Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:44Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:44Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:44Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:44Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:58:44Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:44Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:58:44Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:58:44Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:58:44Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:58:45Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:45Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:45Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:48Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:48Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager] Neighbors (1): 
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   R5 at 10.3.0.5:5555 - O ALIVE (last seen: 1.096111276s ago)
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 16)
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 16)
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   10.1.0.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   192.168.2.0/24 via 10.3.0.5 dev enp0s9 metric 2 (Protocol)
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager]   192.168.1.0/24 via 10.3.0.5 dev enp0s9 metric 3 (Protocol)
+[2025-06-24T18:58:49Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:49Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 16)
+[2025-06-24T18:58:52Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:52Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:58:52Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:58:52Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:58:52Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:52Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:58:52Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:58:52Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:58:52Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:58:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:53Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:53Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:58:54Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 17)
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 17)
+[2025-06-24T18:58:57Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:00Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:00Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:00Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:00Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 17)
+[2025-06-24T18:59:00Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.1.0/24 via 10.3.0.5 metric 3 from R5
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding new route to 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.1.0/24 via 10.3.0.5 metric 3
+[2025-06-24T18:59:00Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.1.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:00Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.1.0/24
+[2025-06-24T18:59:00Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:59:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:01Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:01Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:04Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:04Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 6 routes (seq: 18)
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 6 routes (seq: 18)
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:05Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 18)
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:59:08Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:59:08Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:59:08Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:59:08Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:59:08Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:59:08Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:59:08Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:59:08Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:59:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:09Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:09Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:09Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.2.0.5/24 (was via R5)
+[2025-06-24T18:59:09Z INFO  custom_ospf::routing_table] Removing route to 10.2.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:59:09Z INFO  custom_ospf::routing_table] Deleting route: 10.2.0.0/24 via 10.3.0.5
+[2025-06-24T18:59:09Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.2.0.0/24
+[2025-06-24T18:59:09Z INFO  custom_ospf::routing_table] Successfully removed route to 10.2.0.0/24
+[2025-06-24T18:59:09Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.2.0.5/24 from system
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 19)
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 19)
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:13Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 435 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 6 routes (seq: 19)
+[2025-06-24T18:59:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.2.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:59:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.1.0/24 (not better)
+[2025-06-24T18:59:16Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.3.0/24 via 10.3.0.3 metric 2 from R5
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 192.168.2.0/24 (not better)
+[2025-06-24T18:59:16Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.1.0.0/24 (not better)
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:16Z INFO  custom_ospf::routing_table] Adding new route to 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:59:16Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.2.0.0/24 via 10.3.0.5 metric 1
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Creating route: network=10.2.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:16Z INFO  custom_ospf::routing_table] Successfully added route: 10.2.0.0/24
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Skipping route to local network 192.168.3.0/24
+[2025-06-24T18:59:16Z DEBUG custom_ospf::routing_table] Route validation failed for 192.168.3.0/24
+[2025-06-24T18:59:16Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:59:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:17Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:17Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 10.1.0.0/24 (was via R5)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Removing route to 10.1.0.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Deleting route: 10.1.0.0/24 via 10.3.0.5
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager] === DEBUG STATUS ===
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager] Neighbors (1): 
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager]   R5 at 10.3.0.5:5555 - O ALIVE (last seen: 2.913695365s ago)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 10.1.0.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully removed route to 10.1.0.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 10.1.0.0/24 from system
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.2.0/24 (was via R5)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Removing route to 192.168.2.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Deleting route: 192.168.2.0/24 via 10.3.0.5
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.2.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.2.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.2.0/24 from system
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Removing route to 192.168.1.0/24 (was via R5)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Removing route to 192.168.1.0/24 via 10.3.0.5 (source: Protocol)
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Deleting route: 192.168.1.0/24 via 10.3.0.5
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully deleted route: 192.168.1.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::routing_table] Successfully removed route to 192.168.1.0/24
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::route_manager] Successfully removed route to 192.168.1.0/24 from system
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager] Current routing table:
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager]   192.168.3.1/24 via direct dev enp0s8 metric 0 (Direct)
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager]   10.3.0.3/24 via direct dev enp0s9 metric 0 (Direct)
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager]   10.2.0.0/24 via 10.3.0.5 dev enp0s9 metric 1 (Protocol)
+[2025-06-24T18:59:19Z INFO  custom_ospf::protocol::task_manager] ===================
+[2025-06-24T18:59:20Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:20Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 3 routes (seq: 20)
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 3 routes (seq: 20)
+[2025-06-24T18:59:21Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:24Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:24Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:24Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 303 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:24Z DEBUG custom_ospf::protocol::task_manager] Received UPDATE from R5 with 4 routes (seq: 20)
+[2025-06-24T18:59:24Z DEBUG custom_ospf::protocol::route_manager] Keeping existing route to 10.2.0.0/24 (not better)
+[2025-06-24T18:59:24Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.3.0.0/24 via 10.3.0.5 metric 1 from R5
+[2025-06-24T18:59:24Z INFO  custom_ospf::protocol::route_manager] Accepting route to 192.168.2.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:59:24Z INFO  custom_ospf::protocol::route_manager] Accepting route to 10.1.0.0/24 via 10.3.0.5 metric 2 from R5
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Skipping route to local network 10.3.0.0/24
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Route validation failed for 10.3.0.0/24
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Adding new route to 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Adding route via net-route: 192.168.2.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Creating route: network=192.168.2.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Successfully added route: 192.168.2.0/24
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Gateway 10.3.0.5 found in local network 10.3.0.3/24
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Adding new route to 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Adding route via net-route: 10.1.0.0/24 via 10.3.0.5 metric 2
+[2025-06-24T18:59:24Z DEBUG custom_ospf::routing_table] Creating route: network=10.1.0.0, prefix=24, gateway=10.3.0.5
+[2025-06-24T18:59:24Z INFO  custom_ospf::routing_table] Successfully added route: 10.1.0.0/24
+[2025-06-24T18:59:24Z INFO  custom_ospf::protocol::route_manager] Updated routing table with routes from R5
+[2025-06-24T18:59:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:25Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:25Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:28Z DEBUG custom_ospf::protocol::task_manager] Socket 0 received 79 bytes from 10.3.0.5:5555
+[2025-06-24T18:59:28Z DEBUG custom_ospf::protocol::task_manager] Received HELLO from R5 at 10.3.0.5:5555
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 192.168.3.1 to 192.168.3.255:5555
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Sent HELLO from 10.3.0.3 to 10.3.0.255:5555
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 192.168.3.1
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 192.168.3.1 to 192.168.3.255:5555 with 5 routes (seq: 21)
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Sent UPDATE from 10.3.0.3 to 10.3.0.255:5555 with 5 routes (seq: 21)
+[2025-06-24T18:59:29Z DEBUG custom_ospf::protocol::task_manager] Ignoring loopback message from our own IP: 10.3.0.3

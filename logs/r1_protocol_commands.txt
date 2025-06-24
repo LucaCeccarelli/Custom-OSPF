@@ -1,0 +1,18 @@
+r1@r1:~$ telnet 127.0.0.1 8080
+Trying 127.0.0.1...
+Connected to 127.0.0.1.
+Escape character is '^]'.
+{"command": "neighbors"}
+{"success":true,"message":"Found 2 neighbors","data":[{"interfaces":["10.1.0.2","10.2.0.2","192.168.2.1"],"ip_address":"10.1.0.2","is_alive":true,"last_seen":"286.034893ms ago","router_id":"R2"},{"interfaces":["10.1.0.4","10.2.0.4"],"ip_address":"10.1.0.4","is_alive":true,"last_seen":"1.250103785s ago","router_id":"R4"}]}
+{"command": "neighbors_of", "args": "R2"}
+{"success":true,"message":"Found 3 neighbors for router R2","data":[{"interfaces":["10.1.0.1","192.168.1.1"],"ip_address":"10.1.0.1","is_alive":true,"last_seen":"911.256436ms ago","router_id":"R1"},{"interfaces":["10.1.0.4","10.2.0.4"],"ip_address":"10.2.0.4","is_alive":true,"last_seen":"2.32286182s ago","router_id":"R4"},{"interfaces":["10.3.0.5","10.2.0.5"],"ip_address":"10.2.0.5","is_alive":true,"last_seen":"606.271025ms ago","router_id":"R5"}]}
+{"command": "neighbors_of", "args": "R4"}
+{"success":true,"message":"Found 3 neighbors for router R4","data":[{"interfaces":["10.1.0.2","10.2.0.2","192.168.2.1"],"ip_address":"10.2.0.2","is_alive":true,"last_seen":"1.397359581s ago","router_id":"R2"},{"interfaces":["10.2.0.5","10.3.0.5"],"ip_address":"10.2.0.5","is_alive":true,"last_seen":"311.066259ms ago","router_id":"R5"},{"interfaces":["10.1.0.1","192.168.1.1"],"ip_address":"10.1.0.1","is_alive":true,"last_seen":"974.746368ms ago","router_id":"R1"}]}
+{"command": "stop"}
+{"success":true,"message":"Protocol stopped successfully","data":null}
+{"command": "start"}
+{"success":true,"message":"Protocol started successfully","data":null}
+{"command": "status"}
+{"success":true,"message":"Status retrieved","data":{"is_running":true,"router_id":"R1"}}
+{"command": "routing_table"}
+{"success":true,"message":"Retrieved 6 routes","data":[{"destination":"10.1.0.1/24","interface":"enp0s9","metric":0,"next_hop":"direct","source":"Direct"},{"destination":"192.168.1.1/24","interface":"enp0s8","metric":0,"next_hop":"direct","source":"Direct"},{"destination":"192.168.2.0/24","interface":"enp0s9","metric":1,"next_hop":"10.1.0.2","source":"Protocol"},{"destination":"192.168.3.0/24","interface":"enp0s9","metric":3,"next_hop":"10.1.0.4","source":"Protocol"},{"destination":"10.3.0.0/24","interface":"enp0s9","metric":2,"next_hop":"10.1.0.4","source":"Protocol"},{"destination":"10.2.0.0/24","interface":"enp0s9","metric":1,"next_hop":"10.1.0.2","source":"Protocol"}]}
