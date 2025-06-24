@@ -2,7 +2,8 @@ use ipnetwork::Ipv4Network;
 use log::{info, warn, debug};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::process::Command;
+use pnet::datalink;
+use pnet::ipnetwork::IpNetwork;
 
 #[derive(Debug, Clone)]
 pub struct InterfaceInfo {
@@ -44,32 +45,36 @@ impl Network {
     }
 
     fn get_interface_info(&self, interface_name: &str) -> Result<InterfaceInfo, Box<dyn std::error::Error>> {
-        let output = Command::new("ip")
-            .args(&["addr", "show", interface_name])
-            .output()?;
+        // Get all network interfaces
+        let interfaces = datalink::interfaces();
 
-        if !output.status.success() {
-            return Err(format!("Interface {} not found", interface_name).into());
+        // Find the interface by name
+        let target_interface = interfaces
+            .into_iter()
+            .find(|iface| iface.name == interface_name)
+            .ok_or_else(|| format!("Interface {} not found", interface_name))?;
+
+        // Check if interface is up
+        if !target_interface.is_up() {
+            return Err(format!("Interface {} is not up", interface_name).into());
         }
 
-        let output_str = String::from_utf8_lossy(&output.stdout);
-
-        // Chercher l'adresse IPv4
-        for line in output_str.lines() {
-            if line.contains("inet ") && !line.contains("inet6") {
-                let parts: Vec<&str> = line.trim().split_whitespace().collect();
-                if parts.len() >= 2 && parts[0] == "inet" {
-                    let addr_with_prefix = parts[1];
-                    let network: Ipv4Network = addr_with_prefix.parse()?;
-                    let ip = network.ip();
-
-                    return Ok(InterfaceInfo {
-                        name: interface_name.to_string(),
-                        ip,
-                        network,
-                        metric: 1,
-                    });
+        // Find the first IPv4 address on this interface
+        for ip_network in target_interface.ips {
+            if let IpNetwork::V4(ipv4_network) = ip_network {
+                // Skip loopback addresses
+                if ipv4_network.ip().is_loopback() {
+                    continue;
                 }
+
+                debug!("Found IPv4 network {} on interface {}", ipv4_network, interface_name);
+
+                return Ok(InterfaceInfo {
+                    name: interface_name.to_string(),
+                    ip: ipv4_network.ip(),
+                    network: ipv4_network,
+                    metric: 1,
+                });
             }
         }
 

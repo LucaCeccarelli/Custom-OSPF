@@ -318,33 +318,11 @@ impl RoutingTable {
             },
             Err(e) => {
                 debug!("Route delete failed (may not exist): {}", e);
-
-                // Try with ip command as fallback
-                let _ = self.delete_route_with_ip_command(route).await;
                 Ok(()) // Not a critical error
             }
         }
     }
-
-    async fn delete_route_with_ip_command(&self, route: &RouteEntry) -> Result<(), Box<dyn std::error::Error>> {
-        use tokio::process::Command;
-
-        let mut cmd = Command::new("ip");
-        cmd.args(&["route", "del", &route.destination.to_string()]);
-
-        if !route.next_hop.is_unspecified() {
-            cmd.args(&["via", &route.next_hop.to_string()]);
-        }
-
-        let output = cmd.output().await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            debug!("ip route del failed: {}", stderr);
-        }
-
-        Ok(())
-    }
+    
 }
 
 impl Drop for RoutingTable {
